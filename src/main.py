@@ -8,15 +8,19 @@ load_dotenv()
 
 def main():
     target = Target(
-        problem_class="Quality Assurance for Code",
-        initial_task_description="Review my last commit to the codebase in main branch and find possible vulnerabilities."
+        problem_class="Code Generation",
+        initial_task_description="Read the file /home/xgod/PycharmProjects/jb_stem/src/llm/api/llm_client.py and write a complete test suite for it using pytest. Tests should cover normal behavior, edge cases, and error handling. Save the result to /home/xgod/PycharmProjects/jb_stem/tests/test_llm_client.py"
     )
 
     stem_agent = StemAgent(os.getenv("API_KEY"), target)
 
     response = stem_agent.build_scoring_function()
 
-    print(response.output[1].content[0].text)
+    response = stem_agent.run_baseline()
+    print(response)
+
+    scoring = stem_agent.score_output(response)
+    print(scoring)
 
 if __name__ == "__main__":
     main()

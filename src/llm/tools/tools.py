@@ -47,8 +47,12 @@ CUSTOM_TOOLS = {
 }
 
 BUILTIN_TOOLS = {
-    "web_search": {"type": "web_search"},
-    "code_interpreter": {"type": "code_interpreter", "container": {"type": "auto"}},
+    "web_search": {
+        "type": "web_search"
+    },
+    "code_interpreter": {
+        "type": "code_interpreter", "container": {"type": "auto"}
+    },
 }
 
 def get_tools(tool_names: list[str]) -> tuple[list, dict]:
@@ -60,7 +64,7 @@ def get_tools(tool_names: list[str]) -> tuple[list, dict]:
             schemas.append(BUILTIN_TOOLS[name])
 
         if name in CUSTOM_TOOLS:
-            schemas.append(CUSTOM_TOOLS[name])
+            schemas.append(CUSTOM_TOOLS[name]["schema"])
             executors[name] = CUSTOM_TOOLS[name]["fn"]
 
     return schemas, executors

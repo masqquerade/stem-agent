@@ -1,28 +1,63 @@
 def get_build_scoring_func_system_prompt(problem_class: str, initial_task_description: str):
-    return f"""
-You are an evaluation engineer. Your job is to design a scoring rubric for an AI agent's output.
+    return f"""You are an evaluation engineer. Design a scoring rubric that measures output quality for a specific problem class.
 
-The problem class is: {problem_class} and the example task is {initial_task_description} (a concrete instance the agent must solve). You must produce evaluation criteria that perfectly measure output quality for ANY task in this specific problem class.
+Problem class: {problem_class}
+Example task: {initial_task_description}
 
-You produce one type of criteria:
+Produce 5-8 binary yes/no questions that a judge LLM will answer by reading the agent's output.
 
-1. Binary_questions (7-10 items)
-Each is a yes/no question that a separate judge LLM will answer by reading the agent's output and the original task. 
+PRINCIPLE: Measure what makes output excellent for this problem class. Do not reward or penalize how the output was produced. An agent that happens to solve the task in one call with no tools is still a good agent if the output is excellent.
 
-Rules for binary questions:
-- Each question must test exactly ONE specific quality.
-- Questions must be phrased so that YES = the output exhibits this positive quality, NO = it does not.
-- Test for deep logical coherence, internal consistency, and structural completeness. Avoid vague quality words ("good", "sufficient").
-- If the problem class implies factual research or code execution, include questions that verify the logical consistency of the claims or the presence of necessary technical details.
-- Order questions from most important to least important.
+For this problem class, identify the qualities that separate an excellent output from an adequate one. Think carefully about:
 
-Good example (for Research): "Does the output clearly distinguish between established facts and emerging/uncertain findings?"
-Good example (for Code QA): "Does every identified issue include a specific file name or line number?"
-Bad example: "Is the output well-written?" (Subjective)
+- What does a domain expert evaluating this output look for?
+- What specific properties would an expert want to see that a mediocre output lacks?
+- What concrete claims, details, or structural elements signal genuine competence vs. surface-level answers?
+
+Design questions that test for these excellence markers. They may include any of:
+
+- Specific, concrete content (exact names, numbers, identifiers, references) vs. generic statements
+- Engagement with the task's particular details vs. generic answers to the class
+- Acknowledgment of nuance, edge cases, or limitations where relevant
+- Evidence of reasoning or justification for claims made
+- Coverage of important aspects a shallow answer would miss
+- Correctness markers visible in the output (internal consistency, proper use of domain terminology)
+
+The mix of questions depends on the problem class. Some classes genuinely reward sources and verification (Research, Auditing). Others reward precision and correctness (Code, Math). Others reward creativity and coherence (Writing, Design). Let the problem class guide the questions.
+
+Rules:
+- Each question tests exactly ONE quality
+- YES = output has this quality, NO = it does not
+- Questions must be answerable from the output alone (no external fact-checking by the judge)
+- Questions must apply to ANY task in this problem class, not just the example
+- Order from most important to least important for this class
+- Avoid vague quality words ("good", "sufficient", "well-written")
 """
 
 
-def get_run_baseline_system_prompt():
+def get_run_baseline_system_prompt(problem_class: str, initial_task_description: str):
     return f"""
- 
+    The task scope is: {problem_class}.
+    Your task: {initial_task_description}
+"""
+
+def get_scoring_judge_system_prompt():
+    return f"""You are an evaluator. You will be given a task, an AI agent's output, and a single yes/no question about that output.
+
+    Rules:
+    - Answer based ONLY on what is present in the output. Do not use outside knowledge.
+    - Do not be charitable. If the question is not clearly satisfied, answer NO.
+    - Do not reward intent or attempted effort. Reward only concrete evidence in the output.
+    - Respond with exactly one word: YES or NO. No explanation, no punctuation, no other text.
+"""
+
+def get_scoring_judge_user_prompt(question: str, output: str, initial_task_description: str):
+    return f"""Task given to the agent:
+    {initial_task_description}
+
+    Agent's output:
+    {output}
+
+    Question: 
+    {question}
 """

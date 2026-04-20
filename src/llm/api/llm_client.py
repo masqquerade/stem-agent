@@ -1,3 +1,4 @@
+import json
 import time
 from dataclasses import dataclass
 
@@ -17,6 +18,26 @@ class LLMCallRecord:
     # iteration: int | None
     phase: str
 
+
+def execute_tools(
+        response,
+        executors: dict
+):
+    tools_outputs = []
+
+    for item in response.output:
+        if item.type == "function_call":
+            args = json.loads(item.arguments)
+            result = executors[item.name](**args)
+            tools_outputs.append({
+                "type": "function_call_output",
+                "call_id": item.call_id,
+                "output": str(result)
+            })
+
+    return tools_outputs
+
+
 class LLMClient:
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
@@ -34,7 +55,7 @@ class LLMClient:
             temperature: float = None,
             tools: list[dict] = None,
             response_format: dict = None,
-            reasoning_effort: str = None
+            reasoning_effort: str = None,
     ):
         kwargs: dict = {
             "model": model,
@@ -56,7 +77,8 @@ class LLMClient:
         start = time.perf_counter()
         response = self.client.responses.create(**kwargs)
         latency_ms = int((time.perf_counter() - start) * 1000)
-
+        for item in response.output:
+            print(item.type)
         has_tool_calls = any(
             item.type == "function_call" for item in response.output
         )
@@ -78,4 +100,4 @@ class LLMClient:
 
         print(record)
 
-        return response
+        return response, record
