@@ -10,7 +10,7 @@ generate_config_schema = {
                 "enum": [
                     "ADD_TOOL",
                     "REMOVE_TOOL",
-                    "DEFAULT",
+                    "CHANGE_WORKFLOW",
                     "ADJUST_RESOURCES",
                     "PROMPT_REWRITE"
                 ]
@@ -20,7 +20,6 @@ generate_config_schema = {
                 "enum": [
                     "react",
                     "plan_then_execute",
-                    "iterative_refinement",
                     "decompose_and_merge"
                 ]
             },

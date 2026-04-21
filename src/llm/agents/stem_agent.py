@@ -7,7 +7,9 @@ from src.llm.api.llm_client import LLMClient, execute_tools
 from src.llm.schemas.scoring import build_scoring_func_response_schema
 
 # Prompts
-from src.llm.prompts.prompts import *
+from src.llm.prompts.build_scoring_func_prompt import get_build_scoring_func_system_prompt
+from src.llm.prompts.run_baseline_prompt import get_run_baseline_system_prompt
+from src.llm.prompts.scoring_judge_prompt import get_scoring_judge_system_prompt, get_scoring_judge_user_prompt
 
 # Tools
 from src.llm.tools.tools import (
@@ -142,3 +144,6 @@ class StemAgent:
 
     # Generation
 
+
+# добавил бы обработку ошибок в воркфлоу. откат, елси что то пошло
+# не так и рефлексия --- еще попытка
