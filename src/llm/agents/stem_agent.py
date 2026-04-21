@@ -34,8 +34,9 @@ class StemAgent:
         self.base_model = base_model
         self.th_model = th_model
         self.scoring_function = None
+        self.baseline_scoring = None
 
-    ## should be underscored
+    # Preparation
     def build_scoring_function(self):
         response, _ = self.llm_client.call(
             context=[{
@@ -131,15 +132,13 @@ class StemAgent:
 
         return response.output_text
 
-    def _sense(self):
-        """
-        SENSE phase operates with raw input data from the user.
-        This stage is divided into several parts:
-            1. Generating a scoring function for continuous improving of the target agent.
-            2. Running a baseline and scoring it.
-            3. Creating several diverse test tasks from the same problems-class to prevent overfitting.
-        """
+    def _prepare(self):
+        self.build_scoring_function()
 
-        # 1. Generate a scoring function
+        baseline_output = self.run_baseline()
 
-        pass
+        scoring = self.score_output(baseline_output)
+        self.baseline_scoring = scoring
+
+    # Generation
+

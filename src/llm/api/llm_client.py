@@ -65,7 +65,7 @@ class LLMClient:
         if reasoning_effort:
             kwargs["reasoning"] = { "effort": reasoning_effort }
 
-        if temperature:
+        if temperature is not None:
             kwargs["temperature"] = temperature
 
         if tools:
@@ -101,3 +101,17 @@ class LLMClient:
         print(record)
 
         return response, record
+
+    # Wrapper for agent calls
+    def call_agentic(self,
+                     context: list[dict],
+                     label: str,
+                     tools: list[dict] = None,
+                     temperature=0.3):
+        return self.call(
+            context=context,
+            label=label,
+            model="gpt-4o",
+            temperature=temperature,
+            tools=tools,
+        )
