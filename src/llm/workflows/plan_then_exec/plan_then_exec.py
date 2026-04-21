@@ -1,8 +1,8 @@
 import json
 
-from src.llm.schemas.workflows import generate_plan_pte_schema
 from src.llm.workflows.base import BaseWorkflow
 from src.llm.workflows.plan_then_exec.prompts.combine_prompt import get_combine_prompt
+from src.llm.workflows.plan_then_exec.schemas.generate_plan_schema import generate_plan_pte_schema
 from src.llm.workflows.react.react import ReactWorkflow
 
 
@@ -17,6 +17,7 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
 
         # Generate the plan
         plan_ctx = [
+            {"role": "system", "content": self.config.system_prompt},
             {
                 "role": "user",
                 "content": f"Create a step-by-step plan to solve this task: {task}."
@@ -37,10 +38,13 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
         # Execute each part using ReAct
         for step in steps:
             res_text, state = react_workflow.run(step)
+            if not state:
+                return res_text, False
             local_ctx.append(f"Step: {step}\nResult: {res_text}")
 
         # Combine results and return
         ctx = [
+            {"role": "system", "content": self.config.system_prompt},
             {
                 "role": "user",
                 "content": get_combine_prompt(task, local_ctx)

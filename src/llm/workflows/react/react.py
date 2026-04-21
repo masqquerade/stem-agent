@@ -9,7 +9,10 @@ class ReactWorkflow(BaseWorkflow):
             "content": task
         }
 
-        context = [user_input]
+        context = [
+            {"role": "system", "content": self.config.system_prompt},
+            user_input
+        ]
 
         response = None
 
