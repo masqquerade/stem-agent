@@ -9,6 +9,8 @@ from src.llm.workflows.react.react import ReactWorkflow
 
 class DecomposeAndMergeWorkflow(BaseWorkflow):
     def run(self, task: str) -> tuple[str, bool, list[TraceEvent]]:
+        self.trace = []
+
         react_workflow = ReactWorkflow(
             self.llm_client,
             self.config,
