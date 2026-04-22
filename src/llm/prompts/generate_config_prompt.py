@@ -10,6 +10,7 @@ def _format_score_lines(scores: dict, scoring_function: list, failed_only: bool 
     ]
     return "\n".join(lines)
 
+
 def generate_config_init_prompt(
         problem_class: str,
         baseline_score: float,
@@ -31,10 +32,15 @@ def generate_config_init_prompt(
     ## System Architecture Constraints
     1. `mutation_strategy`: You MUST set this exactly to "INITIAL_DESIGN".
     2. `workflow_type`: Select the execution topology (`react`, `plan_then_execute`, `decompose_and_merge`). The Python engine automatically handles the step-by-step routing.
-    3. `system_prompt`: MUST NOT contain step-by-step workflow instructions. Instead, write strict identity rules, formatting constraints, and domain-specific knowledge. CRITICAL: the system_prompt must generalize to ANY task within the problem class, not the specific example task used in evaluation. If the tools list includes search or retrieval tools, the system_prompt MUST instruct the agent to use them to gather evidence rather than relying on internal knowledge.
+    3. `system_prompt`: MUST NOT contain step-by-step workflow instructions. Instead, write strict identity rules, formatting constraints, and domain-specific knowledge.
+       - GENERALIZATION: The system_prompt must generalize to ANY task within the problem class, not just the specific example task used in evaluation.
+       - UNCONDITIONAL TOOL USAGE: If the tools list includes search or retrieval tools, you MUST enforce their usage unconditionally. Do not use conditional words like "if" or "when required".
+         * BAD: "Use the web_search tool if you need external information." (The LLM will act lazy and bypass the tool).
+         * GOOD: "You MUST use the web_search tool to gather empirical data and citations BEFORE writing any analysis. Never rely solely on your internal training data."
     4. `tools`: Select strictly from the available registry: {tool_list}.
     5. `mutation_log`: Explicitly explain how your chosen workflow, tools, and system prompt resolve the specific baseline failures.
 """
+
 
 def generate_config_prompt(
         problem_class: str,
@@ -42,9 +48,12 @@ def generate_config_prompt(
         scores: dict,
         scoring_function: list,
         tool_list: list,
-        ledger: str,  # not implemented yet
+        ledger: str,
 ):
     per_question_scores_str = _format_score_lines(scores, scoring_function)
+
+    # Note: Ensure `parent_config` is formatted cleanly as a string or JSON dump
+    # e.g., parent_config_str = parent_config.model_dump_json(indent=2) if using Pydantic
 
     return f"""
     You are an elite AI System Architect evolving a specialized AI agent for the problem class: {problem_class}.
@@ -62,11 +71,14 @@ def generate_config_prompt(
 
     ## Evolving the Architecture
     1. `mutation_strategy`: You MUST select exactly one strategy from ["ADD_TOOL", "REMOVE_TOOL", "CHANGE_WORKFLOW", "ADJUST_RESOURCES", "PROMPT_REWRITE"].
-    2. Apply the mutation. If you change the workflow or add a tool, you MUST update the `system_prompt` so it synergizes with your new architecture.
 
     ## System Architecture Constraints
     1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`).
-    2. `system_prompt`: MUST NOT contain step-by-step workflow instructions. It must only contain identity rules, formatting constraints, and domain heuristics. CRITICAL: the system_prompt must generalize to ANY task within the problem class, not the specific example task used in evaluation. If the tools list includes search or retrieval tools, the system_prompt MUST instruct the agent to use them to gather evidence rather than relying on internal knowledge.
+    2. `system_prompt`: MUST NOT contain step-by-step workflow instructions. It must only contain identity rules, formatting constraints, and domain heuristics.
+       - GENERALIZATION: The system_prompt must generalize to ANY task within the problem class.
+       - UNCONDITIONAL TOOL USAGE: If the tools list includes search or retrieval tools, you MUST enforce their usage unconditionally. Do not use conditional words like "if" or "when required".
+         * BAD: "Use the web_search tool if you need external information." (The LLM will act lazy and bypass the tool).
+         * GOOD: "You MUST use the web_search tool to gather empirical data and citations BEFORE writing any analysis. Never rely solely on your internal training data."
     3. `tools`: Select strictly from the available registry: {tool_list}.
     4. `mutation_log`: You must justify your chosen `mutation_strategy` and state exactly which failing score you expect it to improve based on the Ledger.
 """

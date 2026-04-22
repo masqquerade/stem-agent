@@ -1,9 +1,9 @@
 import json
 
 from src.llm.api.llm_client import execute_tools
+from src.llm.compression.tool_calling_compressor import compress_tool_output
+from src.llm.tools.tools import BUILTIN_TOOLS
 from src.llm.workflows.base import BaseWorkflow, TraceEvent, ToolExecution
-
-PRUNE_LIMIT = 500
 
 class ReactWorkflow(BaseWorkflow):
     # result and state (failure or success)
@@ -80,7 +80,7 @@ class ReactWorkflow(BaseWorkflow):
         )
         executions = []
         for item in response.output:
-            if item.type == "function_call":
+            if item.type == "function_call" or item.type in BUILTIN_TOOLS:
                 output = next(
                     (tool_output["output"] for tool_output in tool_outputs if tool_output["call_id"] == item.call_id),
                     ""
@@ -89,6 +89,10 @@ class ReactWorkflow(BaseWorkflow):
                     name=item.name,
                     args=json.loads(item.arguments),
                     is_error=output.startswith("Error"),
-                    output_summary=output[:PRUNE_LIMIT]
+                    output_summary=compress_tool_output(
+                        tool_name=item.name,
+                        raw_output=output
+                    )
                 ))
+
         self.trace.append(TraceEvent(step=step, thought=thought, tool_executions=executions))

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from openai import OpenAI
 
+from src.llm.tools.tools import BUILTIN_TOOLS
+
+
 @dataclass
 class LLMCallRecord:
     label: str
@@ -27,12 +30,17 @@ def execute_tools(
 
     for item in response.output:
         if item.type == "function_call":
-            args = json.loads(item.arguments)
-            result = executors[item.name](**args)
+            try:
+                args = json.loads(item.arguments)
+                result = executors[item.name](**args)
+                output = str(result)
+            except Exception as e:
+                output = f"Error: {e}"
+
             tools_outputs.append({
                 "type": "function_call_output",
                 "call_id": item.call_id,
-                "output": str(result)
+                "output": output
             })
 
     return tools_outputs
@@ -80,7 +88,7 @@ class LLMClient:
         for item in response.output:
             print(item.type)
         has_tool_calls = any(
-            item.type == "function_call" for item in response.output
+            (item.type == "function_call" or item.type in BUILTIN_TOOLS) for item in response.output
         )
 
         record = LLMCallRecord(

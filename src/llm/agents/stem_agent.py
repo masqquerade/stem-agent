@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from dataclasses import dataclass
 
@@ -268,21 +269,28 @@ class StemAgent:
             executors=executors,
         )
 
-        scoring = {}
+        evaluation_results = []
 
         # should be parallel
         for task in self.test_sample:
             print(f"\n[DEBUG _evaluate] running task [{task['task_id']}]: {task['task_description'][:100]!r}")
-            result, state = agent_workflow.run(task["task_description"])
+            result, state, trace = agent_workflow.run(task["task_description"])
             print(f"[DEBUG _evaluate] state: {state}, result length: {len(result)}")
             print(f"[DEBUG _evaluate] result preview: {result[:300]!r}")
 
             scores = self.score_output(result, task["task_description"])
-            scoring[task["task_id"]] = scores
 
-        return scoring
+            result = {
+                "task_id": task["task_id"],
+                "task_description": task["task_description"],
+                "success_state": state,
+                "trace": [dataclasses.asdict(event) for event in trace], # for map stage
+                "scores": scores
+            }
 
+            evaluation_results.append(result)
 
+        return evaluation_results
 
 # добавил бы обработку ошибок в воркфлоу. откат, елси что то пошло
 # не так и рефлексия --- еще попытка
