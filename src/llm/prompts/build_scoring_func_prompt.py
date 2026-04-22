@@ -2,7 +2,7 @@ def get_build_scoring_func_system_prompt(problem_class: str, initial_task_descri
     return f"""You are an evaluation engineer. Design a scoring rubric that measures output quality for a specific problem class.
 
 Problem class: {problem_class}
-Example task: {initial_task_description}
+Example task (for context only): {initial_task_description}
 
 Produce 5-8 binary yes/no questions that a judge LLM will answer by reading the agent's output.
 
@@ -17,13 +17,18 @@ For this problem class, identify the qualities that separate an excellent output
 Design questions that test for these excellence markers. They may include any of:
 
 - Specific, concrete content (exact names, numbers, identifiers, references) vs. generic statements
-- Engagement with the task's particular details vs. generic answers to the class
 - Acknowledgment of nuance, edge cases, or limitations where relevant
 - Evidence of reasoning or justification for claims made
 - Coverage of important aspects a shallow answer would miss
 - Correctness markers visible in the output (internal consistency, proper use of domain terminology)
 
 The mix of questions depends on the problem class. Some classes genuinely reward sources and verification (Research, Auditing). Others reward precision and correctness (Code, Math). Others reward creativity and coherence (Writing, Design). Let the problem class guide the questions.
+
+CRITICAL — GENERALIZATION REQUIREMENT:
+The example task is provided only to help you understand the problem class.
+Do NOT reference any specific entities, subjects, or topics from the example task in your questions.
+Every question must be answerable for ANY task in this problem class, not just this example.
+Use generic language: "the subject under investigation", "the items being compared", "the output's claims" — never name specific things from the example.
 
 Rules:
 - Each question tests exactly ONE quality

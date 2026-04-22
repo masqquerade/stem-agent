@@ -39,6 +39,7 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
 
         for subtask in subtasks:
             result, state = react_workflow.run(subtask["worker_prompt"])
+            self.trace.extend(react_workflow.trace)
             if not state:
                 return result, False
             results.append(f"Subtask: {subtask['task']}\nResult: {result}")

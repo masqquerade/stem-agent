@@ -3,6 +3,8 @@ def read_file(path: str) -> str:
         return f.read()[:50000]
 
 def write_file(path: str, content: str) -> str:
+    import os
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write(content)
     return f"Wrote {len(content)} bytes to {path}"
@@ -31,7 +33,7 @@ CUSTOM_TOOLS = {
         "schema": {
             "type": "function",
             "name": "write_file",
-            "description": "Write to a file from disk",
+            "description": "Write content to a file on disk",
             "parameters": {
                 "type": "object",
                 "properties": {

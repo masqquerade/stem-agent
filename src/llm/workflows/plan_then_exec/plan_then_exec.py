@@ -37,7 +37,9 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
 
         # Execute each part using ReAct
         for step in steps:
-            res_text, state = react_workflow.run(step)
+            prior_knowledge = "\n\n".join(local_ctx)
+            res_text, state = react_workflow.run(step, previous_results=prior_knowledge)
+            self.trace.extend(react_workflow.trace)
             if not state:
                 return res_text, False
             local_ctx.append(f"Step: {step}\nResult: {res_text}")

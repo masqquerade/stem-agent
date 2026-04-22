@@ -1,8 +1,21 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from src.llm.api.llm_client import LLMClient
 from src.llm.config.agent_config import AgentConfig
 
+@dataclass
+class ToolExecution:
+    name: str
+    args: dict
+    is_error: bool
+    output_summary: str # pruned output
+
+@dataclass
+class TraceEvent:
+    step: int
+    thought: str
+    tool_executions: list[ToolExecution]
 
 class BaseWorkflow(ABC):
     def __init__(self,
@@ -16,6 +29,7 @@ class BaseWorkflow(ABC):
         self.schemas = schemas
         self.executors = executors
         self.model = model
+        self.trace: list[TraceEvent] = []
 
     @abstractmethod
     def run(self, task: str) -> tuple[str, bool]:
