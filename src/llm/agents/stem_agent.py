@@ -52,7 +52,7 @@ class StemAgent:
             label="[SENSE]: Build scoring function",
             response_format=build_scoring_func_response_schema,
             reasoning_effort="high"
-        )
+
 
         result = json.loads(response.output_text)
 

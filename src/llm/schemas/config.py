@@ -12,9 +12,11 @@ generate_config_schema = {
                     "REMOVE_TOOL",
                     "CHANGE_WORKFLOW",
                     "ADJUST_RESOURCES",
-                    "PROMPT_REWRITE"
+                    "PROMPT_REWRITE",
+                    "INITIAL_DESIGN"
                 ]
             },
+            "mutation_log": { "type": "string" },
             "workflow_type": {
                 "type": "string",
                 "enum": [
@@ -34,7 +36,7 @@ generate_config_schema = {
         "required": [
             "mutation_strategy", "workflow_type",
             "system_prompt", "tools",
-            "temperature", "max_steps"
+            "temperature", "max_steps", "mutation_log"
         ],
         "additionalProperties": False
     }
