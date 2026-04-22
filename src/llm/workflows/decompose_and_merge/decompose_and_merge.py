@@ -1,6 +1,6 @@
 import json
 
-from src.llm.workflows.base import BaseWorkflow
+from src.llm.workflows.base import BaseWorkflow, TraceEvent
 from src.llm.workflows.decompose_and_merge.prompts.decompose_prompt import get_decompose_prompt
 from src.llm.workflows.decompose_and_merge.prompts.merge_prompt import get_merge_prompt
 from src.llm.workflows.decompose_and_merge.schemas.decompose_schema import decompose_schema
@@ -8,7 +8,7 @@ from src.llm.workflows.react.react import ReactWorkflow
 
 
 class DecomposeAndMergeWorkflow(BaseWorkflow):
-    def run(self, task: str) -> tuple[str, bool]:
+    def run(self, task: str) -> tuple[str, bool, list[TraceEvent]]:
         react_workflow = ReactWorkflow(
             self.llm_client,
             self.config,
@@ -38,10 +38,10 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
         results = []
 
         for subtask in subtasks:
-            result, state = react_workflow.run(subtask["worker_prompt"])
+            result, state, _ = react_workflow.run(subtask["worker_prompt"])
             self.trace.extend(react_workflow.trace)
             if not state:
-                return result, False
+                return result, False, self.trace
             results.append(f"Subtask: {subtask['task']}\nResult: {result}")
 
         merge_ctx = [
@@ -59,4 +59,4 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
             temperature=self.config.temperature,
         )
 
-        return merged.output_text, True
+        return merged.output_text, True, self.trace

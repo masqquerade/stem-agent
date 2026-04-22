@@ -1,13 +1,13 @@
 import json
 
-from src.llm.api.llm_client import LLMClient, execute_tools
+from src.llm.api.llm_client import execute_tools
 from src.llm.workflows.base import BaseWorkflow, TraceEvent, ToolExecution
 
 PRUNE_LIMIT = 500
 
 class ReactWorkflow(BaseWorkflow):
     # result and state (failure or success)
-    def run(self, task: str, previous_results: str = "") -> tuple[str, bool]:
+    def run(self, task: str, previous_results: str = "") -> tuple[str, bool, list[TraceEvent]]:
         self.trace = []
 
         content = task
@@ -53,7 +53,7 @@ class ReactWorkflow(BaseWorkflow):
 
             if not record.has_tool_calls:
                 self._record_step(step, response, [])
-                return response.output_text, True
+                return response.output_text, True, self.trace
 
             tool_outputs = execute_tools(
                 response, self.executors
@@ -68,10 +68,10 @@ class ReactWorkflow(BaseWorkflow):
             context = context + list(response.output) + tool_outputs
 
         if response is None:
-            return "ERROR WHILE REACTING", False
+            return "ERROR WHILE REACTING", False, self.trace
 
         # task may be incomplete cause of lack of steps -> False
-        return response.output_text, False
+        return response.output_text, False, self.trace
 
     def _record_step(self, step: int, response, tool_outputs: list) -> None:
         thought = next(

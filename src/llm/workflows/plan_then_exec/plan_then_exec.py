@@ -1,13 +1,13 @@
 import json
 
-from src.llm.workflows.base import BaseWorkflow
+from src.llm.workflows.base import BaseWorkflow, TraceEvent
 from src.llm.workflows.plan_then_exec.prompts.combine_prompt import get_combine_prompt
 from src.llm.workflows.plan_then_exec.schemas.generate_plan_schema import generate_plan_pte_schema
 from src.llm.workflows.react.react import ReactWorkflow
 
 
 class PlanThenExecuteWorkflow(BaseWorkflow):
-    def run(self, task: str) -> tuple[str, bool]:
+    def run(self, task: str) -> tuple[str, bool, list[TraceEvent]]:
         react_workflow = ReactWorkflow(
             self.llm_client,
             self.config,
@@ -38,10 +38,10 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
         # Execute each part using ReAct
         for step in steps:
             prior_knowledge = "\n\n".join(local_ctx)
-            res_text, state = react_workflow.run(step, previous_results=prior_knowledge)
+            res_text, state, _ = react_workflow.run(step, previous_results=prior_knowledge)
             self.trace.extend(react_workflow.trace)
             if not state:
-                return res_text, False
+                return res_text, False, self.trace
             local_ctx.append(f"Step: {step}\nResult: {res_text}")
 
         # Combine results and return
@@ -60,5 +60,5 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
             temperature=self.config.temperature
         )
 
-        return combination.output_text, True
+        return combination.output_text, True, self.trace
 
