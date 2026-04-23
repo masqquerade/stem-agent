@@ -9,9 +9,11 @@ load_dotenv()
 
 def main():
     target = Target(
-        problem_class="Deep Research",
+        problem_class="Deep Research / System Architecture",
         initial_task_description=(
-            "Compare the latency, infrastructure cost, and contextual accuracy trade-offs of using sparse-dense hybrid retrieval (e.g., Splade + HNSW) in a RAG pipeline versus LoRA fine-tuning for adapting open-weights models (like Llama-3) to highly specialized medical terminology. Provide concrete benchmarks published within the last 12 months, analyze infrastructure costs for a deployment handling 1M daily queries, and formulate a rigorous decision matrix for a resource-constrained health-tech startup."
+            """
+    Conduct a rigorous, up-to-date comparative analysis of the API pricing and performance trade-offs for three leading frontier LLMs (e.g., GPT-4o, Claude 3.5 Sonnet, and Gemini 1.5 Pro) as of 2026. You must use web search to find their exact per-million-token input/output costs, context caching discount rates, and their latest HumanEval benchmark scores. Next, use the code interpreter to simulate a monthly production workload consisting of 250 million input tokens (assuming a 65% cache hit rate) and 50 million output tokens. Calculate the exact monthly operational cost for each model. Finally, calculate the 'Cost per HumanEval percentage point' and construct a structured recommendation matrix advising a high-volume coding startup on the optimal model. Output the entire report directly in your response; do not save or write to any local files.
+            """
         )
     )
 

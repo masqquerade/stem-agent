@@ -20,6 +20,8 @@ def get_decompose_prompt(task: str):
 
     ## 4. Actionable Worker Instructions
     - For each sub-task, provide a `worker_prompt`. This must be a highly specific, standalone instruction for the worker agent. The worker will not see the <task>; it will only see your `worker_prompt`.
+    - CRITICAL — DATA EMBEDDING: If the <task> contains any data payload (inline code, file contents, documents, tables, examples), you MUST copy the relevant portions verbatim into each `worker_prompt` that needs them. Workers are fully isolated — they have no access to the original task or other workers' context. A worker that receives only a sub-goal without the data it needs will fail.
+    - CRITICAL — FILE PATH EMBEDDING: If the <task> mentions specific filesystem paths or entry points, you MUST include those exact paths in every `worker_prompt` that involves file reading. Never invent, assume, or guess file paths. If a worker needs to read files and the task provides an entry point, that entry point MUST appear verbatim in the worker_prompt.
 
     ## Output Format
     You must output a strict JSON object matching the requested schema. No conversational filler.   

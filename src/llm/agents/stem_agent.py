@@ -255,7 +255,7 @@ class StemAgent:
             tools=schemas,
             temperature=0.3,
         )
-
+        print(f"baseline: {response.output_text}")
         return response.output_text
 
     def _prepare(self):
@@ -345,7 +345,13 @@ class StemAgent:
         return config
 
     def _evaluate(self):
-        schemas, executors = get_tools(self.current_config.tools)
+        allowed_tools = []
+
+        for tool in self.current_config.tools:
+            if tool not in ["read_file", "write_file"]:
+                allowed_tools.append(tool)
+
+        schemas, executors = get_tools(allowed_tools)
 
         def run_eval(task):
             agent_workflow = WORKFLOWS[self.current_config.workflow_type](

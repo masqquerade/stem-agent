@@ -73,7 +73,8 @@ def generate_config_prompt(
     1. `mutation_strategy`: You MUST select exactly one strategy from ["ADD_TOOL", "REMOVE_TOOL", "CHANGE_WORKFLOW", "ADJUST_RESOURCES", "PROMPT_REWRITE"].
 
     ## System Architecture Constraints
-    1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`).
+    1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`). If the task requires
+    recursive exploration or deep analysis, you MUST select 'react' or 'plan_then_execute'
     2. `system_prompt`: MUST NOT contain step-by-step workflow instructions. It must only contain identity rules, formatting constraints, and domain heuristics.
        - GENERALIZATION: The system_prompt must generalize to ANY task within the problem class.
        - UNCONDITIONAL TOOL USAGE: If the tools list includes search or retrieval tools, you MUST enforce their usage unconditionally. Do not use conditional words like "if" or "when required".
