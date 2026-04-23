@@ -2,11 +2,11 @@ import json
 
 from src.llm.api.llm_client import execute_tools
 from src.llm.compression.tool_calling_compressor import compress_tool_output
-from src.llm.tools.tools import BUILTIN_TOOLS
 from src.llm.workflows.base import BaseWorkflow, TraceEvent, ToolExecution
+from src.llm.workflows.helpers.sanitizer import sanitize_payload
+
 
 class ReactWorkflow(BaseWorkflow):
-    # result and state (failure or success)
     def run(self, task: str, previous_results: str = "") -> tuple[str, bool, list[TraceEvent]]:
         self.trace = []
 
@@ -27,13 +27,6 @@ class ReactWorkflow(BaseWorkflow):
         response = None
 
         for step in range(self.config.max_steps):
-            print(f"\n[ReAct step {step}] context ({len(context)} messages):")
-            for msg in context:
-                role = msg.get("role") if isinstance(msg, dict) else msg.type
-                content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")
-                content_str = str(content)
-                print(f"  [{role}]: {content_str[:200]!r}")
-
             response, record = self.llm_client.call_agentic(
                 context=context,
                 label=f"[GENERATE][ReAct]: step {step}",
@@ -41,58 +34,78 @@ class ReactWorkflow(BaseWorkflow):
                 temperature=self.config.temperature
             )
 
-            print(f"\n[ReAct step {step}] response ({len(response.output)} items):")
+            executions = []
             for item in response.output:
-                if item.type == "message":
-                    text = item.content[0].text if item.content else ""
-                    print(f"  [message]: {text[:300]!r}")
-                elif item.type == "function_call":
-                    print(f"  [function_call]: {item.name}({item.arguments[:200]!r})")
-                else:
-                    print(f"  [{item.type}]")
+                if item.type.endswith("_call") and item.type != "function_call":
+                    args = sanitize_payload(item)
+
+                    summary_text = "[NATIVE LLM CALL]"
+
+                    if item.type == "web_search_call":
+                        action = args.get("action", {})
+                        if action is not None:
+                            summary_text = f"[web_search_tool] Action: {action.get('type', 'unknown')} - Queries: {action.get('search_queries', [])}"
+
+                    executions.append(ToolExecution(
+                        name=item.type,
+                        args=args,
+                        is_error=False,
+                        output_summary=summary_text
+                    ))
 
             if not record.has_tool_calls:
-                self._record_step(step, response, [])
+                self._record_step(step, response, executions)
                 return response.output_text, True, self.trace
 
             tool_outputs = execute_tools(
                 response, self.executors
             )
 
-            print(f"\n[ReAct step {step}] tool outputs:")
-            for o in tool_outputs:
-                print(f"  [{o.get('call_id', '?')}]: {str(o.get('output', ''))[:200]!r}")
+            api_tool_outputs = []
 
-            self._record_step(step, response, tool_outputs)
+            for item in response.output:
+                if item.type == "function_call":
+                    call_id = getattr(item, "call_id", "")
 
-            context = context + list(response.output) + tool_outputs
+                    out_dict = next((out for out in tool_outputs if out.get("call_id") == call_id), {})
+                    output_str = str(out_dict.get("content", "No output."))
+
+                    args_str = getattr(item, "arguments", "{}")
+                    args = json.loads(args_str)
+
+                    executions.append(ToolExecution(
+                        name=item.name,
+                        args=args,
+                        is_error=output_str.startswith("Error"),
+                        output_summary=compress_tool_output(
+                            tool_name=item.name,
+                            raw_output=output_str
+                        )
+                    ))
+
+                    api_tool_outputs.append({
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": output_str
+                    })
+
+            self._record_step(step, response, executions)
+
+            context = context + list(response.output) + api_tool_outputs
 
         if response is None:
             return "ERROR WHILE REACTING", False, self.trace
 
         # task may be incomplete cause of lack of steps -> False
-        return response.output_text, False, self.trace
+        return getattr(response, "output_text", "ERROR"), False, self.trace
 
-    def _record_step(self, step: int, response, tool_outputs: list) -> None:
-        thought = next(
-            (item.content[0].text for item in response.output if item.type == "message"),
-            ""
-        )
-        executions = []
+    def _record_step(self, step: int, response, executions: list[ToolExecution]):
+        thought = ""
         for item in response.output:
-            if item.type == "function_call" or item.type in BUILTIN_TOOLS:
-                output = next(
-                    (tool_output["output"] for tool_output in tool_outputs if tool_output["call_id"] == item.call_id),
-                    ""
-                )
-                executions.append(ToolExecution(
-                    name=item.name,
-                    args=json.loads(item.arguments),
-                    is_error=output.startswith("Error"),
-                    output_summary=compress_tool_output(
-                        tool_name=item.name,
-                        raw_output=output
-                    )
-                ))
+            if item.type == "message":
+                text_blocks = [block.text for block in getattr(item, "content", []) if getattr(block, "type", "") == "output_text"]
+                if text_blocks:
+                    thought = "".join(text_blocks)
+                    break
 
         self.trace.append(TraceEvent(step=step, thought=thought, tool_executions=executions))

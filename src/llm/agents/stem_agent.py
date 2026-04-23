@@ -273,10 +273,7 @@ class StemAgent:
 
         # should be parallel
         for task in self.test_sample:
-            print(f"\n[DEBUG _evaluate] running task [{task['task_id']}]: {task['task_description'][:100]!r}")
             result, state, trace = agent_workflow.run(task["task_description"])
-            print(f"[DEBUG _evaluate] state: {state}, result length: {len(result)}")
-            print(f"[DEBUG _evaluate] result preview: {result[:300]!r}")
 
             scores = self.score_output(result, task["task_description"])
 

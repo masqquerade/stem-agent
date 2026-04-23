@@ -1,4 +1,4 @@
-def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 2):
+def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 1):
     return f"""
     You are an elite Benchmark Engineer. Your objective is to create a robust, generalized test suite for an AI agent operating in the following problem class: {problem_class}.
 

@@ -31,15 +31,16 @@ def execute_tools(
     for item in response.output:
         if item.type == "function_call":
             try:
-                args = json.loads(item.arguments)
+                args = json.loads(getattr(item, "arguments", "{}"))
                 result = executors[item.name](**args)
+
                 output = str(result)
             except Exception as e:
                 output = f"Error: {e}"
 
             tools_outputs.append({
                 "type": "function_call_output",
-                "call_id": item.call_id,
+                "call_id": getattr(item, "call_id", item.name),
                 "output": output
             })
 
@@ -88,7 +89,7 @@ class LLMClient:
         for item in response.output:
             print(item.type)
         has_tool_calls = any(
-            (item.type == "function_call" or item.type in BUILTIN_TOOLS) for item in response.output
+            item.type == "function_call" for item in response.output
         )
 
         record = LLMCallRecord(

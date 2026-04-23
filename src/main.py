@@ -9,6 +9,7 @@ load_dotenv()
 
 SEP = "-" * 60
 
+
 def main():
     target = Target(
         problem_class="Technical Research",
