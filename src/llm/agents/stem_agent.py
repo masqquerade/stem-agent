@@ -2,11 +2,16 @@ import dataclasses
 import json
 from dataclasses import dataclass
 
+from src.llm.agents.helpers.aggregated_scores_creator import create_aggregated_scores
 from src.llm.api.llm_client import LLMClient, execute_tools
 from src.llm.config.agent_config import AgentConfig
+from src.llm.prompts.analyse_exec_trace_prompt import get_analyse_exec_trace_prompt
 from src.llm.prompts.create_test_tasks_prompt import create_test_task_prompt
 from src.llm.prompts.generate_config_prompt import generate_config_init_prompt, generate_config_prompt
+from src.llm.prompts.reflect_prompt import get_reflect_prompt
+from src.llm.schemas.bug_report import bug_report_schema
 from src.llm.schemas.config import generate_config_schema
+from src.llm.schemas.ledger_rules import ledger_rules_schema
 
 # Schemas
 from src.llm.schemas.scoring import build_scoring_func_response_schema
@@ -100,10 +105,6 @@ class StemAgent:
 
         task_description = task_description or self.target.initial_task_description
 
-        print(f"\n[DEBUG score_output] output length: {len(output)}")
-        print(f"[DEBUG score_output] output preview: {output[:300]!r}")
-        print(f"[DEBUG score_output] task description: {task_description[:100]!r}")
-
         scores = {}
 
         for question in self.scoring_function:
@@ -112,8 +113,6 @@ class StemAgent:
                 output,
                 task_description
             )
-            print(f"\n[DEBUG score_output] question [{question['id']}]: {question['question']}")
-            print(f"[DEBUG score_output] user_prompt length: {len(user_prompt)}")
 
             response, _ = self.llm_client.call(
                 context=[
@@ -131,7 +130,6 @@ class StemAgent:
             )
 
             answer = response.output_text.strip().upper()
-            print(f"[DEBUG score_output] raw answer: {answer!r}")
             scores[question["id"]] = 1 if answer.startswith("YES") else 0
 
         scores["overall"] = sum(scores.values()) / len(self.scoring_function)
@@ -282,12 +280,107 @@ class StemAgent:
                 "task_description": task["task_description"],
                 "success_state": state,
                 "trace": [dataclasses.asdict(event) for event in trace], # for map stage
-                "scores": scores
+                "scores": scores,
+                "bug_report": []
             }
 
             evaluation_results.append(result)
 
         return evaluation_results
+
+    def reflect(self, eval_results: list):
+        failed_results = []
+
+        for result in eval_results:
+            scores = result["scores"]
+
+            if any(score == 0 for key, score in scores.items() if key != "overall"):
+                failed_results.append(result)
+
+        if not failed_results:
+            print("[REFLECT]: perfect run. no rules generated")
+            return []
+
+        for result in failed_results:
+            # generate bug report (map)
+            ctx = [
+                {
+                    "role": "user",
+                    "content": get_analyse_exec_trace_prompt(
+                        task_description=result["task_description"],
+                        task_scores=result["scores"],
+                        execution_trace=result["trace"]
+                    )
+                }
+            ]
+
+            response, _ = self.llm_client.call(
+                context=ctx,
+                label=f"[REFLECT][MAP]: generate bug report for {result['task_id']}",
+                model=self.base_model,
+                response_format=bug_report_schema
+            )
+
+            output_text = getattr(response, "output_text", "{}")
+
+            try:
+                parsed_response = json.loads(output_text)
+                bug_report = parsed_response.get("report", [])
+            except json.JSONDecodeError:
+                print(f"[ERROR] Failed to parse bug report for {result['task_id']}")
+                bug_report = []
+
+            result["bug_report"] = bug_report
+
+        # create ledger rules (reduce)
+        bugs_summary = []
+
+        for result in failed_results:
+            for bug in result["bug_report"]:
+                bugs_summary.append({
+                    "task_id": result["task_id"],
+                    "question_id": bug["question_id"],
+                    "failure_reason": bug["failure_reason"]
+                })
+
+        ctx = [
+            {
+                "role": "user",
+                "content": get_reflect_prompt(
+                    current_config=self.current_config,
+                    aggregated_score_text=create_aggregated_scores(
+                        eval_results=eval_results,
+                        scoring_function=self.scoring_function
+                    ),
+                    map_summaries=json.dumps(bugs_summary, indent=2)
+                )
+            }
+        ]
+
+        response, _ = self.llm_client.call(
+            context=ctx,
+            label="[REFLECT][REDUCE]: create ledger rules",
+            model=self.th_model,
+            reasoning_effort="high",
+            response_format=ledger_rules_schema
+        )
+
+        output_text = getattr(response, "output_text", "{}")
+
+        try:
+            parsed_response = json.loads(output_text)
+            ledger_rules = parsed_response.get("rules", [])
+        except json.JSONDecodeError:
+            print("[ERROR] Failed to parse ledger rules from LLM response.")
+            ledger_rules = []
+
+        # debugggg
+        print(f"\n[REFLECT] Generated {len(ledger_rules)} new rules for the Ledger of Truth:")
+        for i, rule in enumerate(ledger_rules, 1):
+            print(f"  {i}. {rule}")
+        #
+
+        return ledger_rules
 
 # добавил бы обработку ошибок в воркфлоу. откат, елси что то пошло
 # не так и рефлексия --- еще попытка

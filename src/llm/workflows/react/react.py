@@ -97,7 +97,7 @@ class ReactWorkflow(BaseWorkflow):
             return "ERROR WHILE REACTING", False, self.trace
 
         # task may be incomplete cause of lack of steps -> False
-        return getattr(response, "output_text", "ERROR"), False, self.trace
+        return getattr(response, "output_text", "Error"), False, self.trace
 
     def _record_step(self, step: int, response, executions: list[ToolExecution]):
         thought = ""
