@@ -53,6 +53,7 @@ class StemAgent:
         self.config_archive: list[AgentConfig] = []
         self.test_sample = []
         self.current_config: AgentConfig | None = None
+        self.ledger: list[str] = []
 
     # Preparation
     def build_scoring_function(self):
@@ -180,6 +181,7 @@ class StemAgent:
 
     def _prepare(self):
         self.build_scoring_function()
+        self._build_test_sample()
 
         baseline_output = self.run_baseline()
 
@@ -234,7 +236,7 @@ class StemAgent:
             parent_config=parent,
             scores=parent.scoring,
             tool_list=tools_names,
-            ledger="" # TODO
+            ledger=json.dumps(self.ledger, indent=2)
         )
 
         ctx = [
