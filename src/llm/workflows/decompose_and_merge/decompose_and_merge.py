@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from src.llm.workflows.base import BaseWorkflow, TraceEvent
 from src.llm.workflows.decompose_and_merge.prompts.decompose_prompt import get_decompose_prompt
@@ -37,14 +38,31 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
 
         subtasks = json.loads(response.output_text)["subtasks"]
 
-        results = []
+        def run_subtask(subtask):
+            # Create a fresh workflow instance for each thread
+            worker_workflow = ReactWorkflow(
+                self.llm_client,
+                self.config,
+                self.schemas,
+                self.executors
+            )
+            result, state, _ = worker_workflow.run(subtask["worker_prompt"])
+            return {
+                "task": subtask["task"],
+                "result": result,
+                "state": state,
+                "trace": list(worker_workflow.trace)
+            }
 
-        for subtask in subtasks:
-            result, state, _ = react_workflow.run(subtask["worker_prompt"])
-            self.trace.extend(react_workflow.trace)
-            if not state:
-                return result, False, self.trace
-            results.append(f"Subtask: {subtask['task']}\nResult: {result}")
+        with ThreadPoolExecutor() as executor:
+            worker_results = list(executor.map(run_subtask, subtasks))
+
+        results = []
+        for res in worker_results:
+            self.trace.extend(res["trace"])
+            if not res["state"]:
+                return res["result"], False, self.trace
+            results.append(f"Subtask: {res['task']}\nResult: {res['result']}")
 
         merge_ctx = [
             {"role": "system", "content": self.config.system_prompt},

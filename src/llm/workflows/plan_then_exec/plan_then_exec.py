@@ -2,6 +2,7 @@ import json
 
 from src.llm.workflows.base import BaseWorkflow, TraceEvent
 from src.llm.workflows.plan_then_exec.prompts.combine_prompt import get_combine_prompt
+from src.llm.workflows.plan_then_exec.prompts.get_plan_prompt import get_plan_prompt
 from src.llm.workflows.plan_then_exec.schemas.generate_plan_schema import generate_plan_pte_schema
 from src.llm.workflows.react.react import ReactWorkflow
 
@@ -22,7 +23,7 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
             {"role": "system", "content": self.config.system_prompt},
             {
                 "role": "user",
-                "content": f"Create a step-by-step plan to solve this task: {task}."
+                "content": get_plan_prompt(task)
             }
         ]
 
@@ -39,7 +40,11 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
 
         # Execute each part using ReAct
         for step in steps:
-            prior_knowledge = "\n\n".join(local_ctx)
+            prior_knowledge = f"MASTER OBJECTIVE:\n{task}\n\n"
+
+            if local_ctx:
+                prior_knowledge += "COMPLETED STEPS:\n" + "\n\n".join(local_ctx)
+
             res_text, state, _ = react_workflow.run(step, previous_results=prior_knowledge)
             self.trace.extend(react_workflow.trace)
             if not state:

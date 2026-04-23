@@ -9,7 +9,6 @@ from src.llm.workflows.helpers.sanitizer import sanitize_payload
 class ReactWorkflow(BaseWorkflow):
     def run(self, task: str, previous_results: str = "") -> tuple[str, bool, list[TraceEvent]]:
         self.trace = []
-
         content = task
         if previous_results:
             content = f"Previously completed steps:\n{previous_results}\n\nCurrent step to execute:\n{task}"
@@ -27,6 +26,7 @@ class ReactWorkflow(BaseWorkflow):
         response = None
 
         for step in range(self.config.max_steps):
+            print(f"  [ReAct] Step {step}/{self.config.max_steps}")
             response, record = self.llm_client.call_agentic(
                 context=context,
                 label=f"[GENERATE][ReAct]: step {step}",

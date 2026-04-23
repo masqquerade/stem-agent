@@ -1,5 +1,6 @@
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from openai import OpenAI
@@ -26,25 +27,29 @@ def execute_tools(
         response,
         executors: dict
 ):
-    tools_outputs = []
-
-    for item in response.output:
+    def run_tool(item):
         if item.type == "function_call":
             try:
                 args = json.loads(getattr(item, "arguments", "{}"))
+                print(f"  [TOOL CALL]: {item.name}({args})")
                 result = executors[item.name](**args)
-
                 output = str(result)
+                print(f"  [TOOL OUTPUT][{item.name}]: {output[:200]}...")
             except Exception as e:
                 output = f"Error: {e}"
+                print(f"  [TOOL ERROR][{item.name}]: {e}")
 
-            tools_outputs.append({
+            return {
                 "type": "function_call_output",
                 "call_id": getattr(item, "call_id", item.name),
                 "output": output
-            })
+            }
+        return None
 
-    return tools_outputs
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(run_tool, response.output))
+
+    return [r for r in results if r is not None]
 
 
 class LLMClient:
@@ -86,8 +91,7 @@ class LLMClient:
         start = time.perf_counter()
         response = self.client.responses.create(**kwargs)
         latency_ms = int((time.perf_counter() - start) * 1000)
-        for item in response.output:
-            print(item.type)
+        
         has_tool_calls = any(
             item.type == "function_call" for item in response.output
         )
@@ -106,8 +110,6 @@ class LLMClient:
         )
 
         self.log.append(record)
-
-        print(record)
 
         return response, record
 

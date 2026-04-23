@@ -1,5 +1,6 @@
 import dataclasses
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from src.llm.agents.helpers.aggregated_scores_creator import create_aggregated_scores
@@ -54,6 +55,75 @@ class StemAgent:
         self.test_sample = []
         self.current_config: AgentConfig | None = None
         self.ledger: list[str] = []
+        self.config: AgentConfig | None = None
+
+    def run(self, max_iters: int = 3):
+        self._prepare()
+
+        # Start
+        for iteration in range(max_iters):
+            if self.config is not None:
+                break
+
+            print(f"Config building iteration: {iteration}")
+
+            # Generate
+            print("Generating config...")
+            config = self._generate(iteration)
+            self.current_config = config
+            self.config_archive.append(config)
+
+            print(f"  => workflow_type:      {config.workflow_type}")
+            print(f"  => mutation_strategy:  {config.mutation_strategy}")
+            print(f"  => tools:              {config.tools}")
+            print(f"  => temperature:        {config.temperature}")
+            print(f"  => max_steps:          {config.max_steps}")
+            print(f"  => mutation_log:       {config.mutation_log[:200]}...")
+            print(f"  => system_prompt:      {config.system_prompt}")
+
+            # Evaluate
+            eval_results = self._evaluate()
+            print(f"  => Evaluation: {json.dumps(eval_results, indent=2)}")
+
+            config.score = sum(res["scores"].get("overall", 0) for res in eval_results) / max(len(eval_results), 1)
+
+            # Reflect
+            print("Reflecting...")
+            ledger_rules = self.reflect(eval_results)
+
+            if ledger_rules:
+                self.ledger.extend(ledger_rules)
+                print(f"  => Ledger updated with {len(ledger_rules)}")
+
+            if config.score >= 1.0:
+                print("Perfect score achieved.")
+                break
+
+        # Execute user's task
+        print("Executing user's task with generated config")
+
+        best_config = max(self.config_archive, key=lambda cfg: getattr(cfg, "score", 0.0))
+        self.config = best_config
+
+        schemas, executors = get_tools(best_config.tools)
+        agent_workflow = WORKFLOWS[best_config.workflow_type](
+            llm_client=self.llm_client,
+            config=best_config,
+            schemas=schemas,
+            executors=executors
+        )
+
+        task_result, state, _ = agent_workflow.run(self.target.initial_task_description)
+
+        result_scoring = self.score_output(
+            task_result,
+            self.target.initial_task_description
+        )
+
+        print(f"Execution complete. State: {state}")
+
+        return task_result, result_scoring
+
 
     # Preparation
     def build_scoring_function(self):
@@ -108,7 +178,8 @@ class StemAgent:
 
         scores = {}
 
-        for question in self.scoring_function:
+        def judge_question(question):
+            print(f"  [SCORING] Judging question: {question['id']}...")
             user_prompt = get_scoring_judge_user_prompt(
                 question["question"],
                 output,
@@ -131,10 +202,18 @@ class StemAgent:
             )
 
             answer = response.output_text.strip().upper()
-            scores[question["id"]] = 1 if answer.startswith("YES") else 0
+            score = 1 if answer.startswith("YES") else 0
+            print(f"  [SCORING] Question {question['id']} result: {'YES' if score == 1 else 'NO'}")
+            return question["id"], score
+
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(judge_question, self.scoring_function))
+
+        for q_id, score in results:
+            scores[q_id] = score
 
         scores["overall"] = sum(scores.values()) / len(self.scoring_function)
-
+        print(f"  [SCORING] AVG: {scores['overall']}")
         return scores
 
     def run_baseline(self):
@@ -180,12 +259,18 @@ class StemAgent:
         return response.output_text
 
     def _prepare(self):
+        print("Building scoring function...")
         self.build_scoring_function()
+
+        print("Building test sample...")
         self._build_test_sample()
 
+        print("Running baseline...")
         baseline_output = self.run_baseline()
 
+        print("Scoring baseline...")
         scoring = self.score_output(baseline_output)
+
         self.baseline_scoring = scoring
 
     # Generation (set self.current_config)
@@ -262,31 +347,27 @@ class StemAgent:
     def _evaluate(self):
         schemas, executors = get_tools(self.current_config.tools)
 
-        agent_workflow = WORKFLOWS[self.current_config.workflow_type](
-            llm_client=self.llm_client,
-            config=self.current_config,
-            schemas=schemas,
-            executors=executors,
-        )
+        def run_eval(task):
+            agent_workflow = WORKFLOWS[self.current_config.workflow_type](
+                llm_client=self.llm_client,
+                config=self.current_config,
+                schemas=schemas,
+                executors=executors,
+            )
+            result_text, state, trace = agent_workflow.run(task["task_description"])
+            scores = self.score_output(result_text, task["task_description"])
 
-        evaluation_results = []
-
-        # should be parallel
-        for task in self.test_sample:
-            result, state, trace = agent_workflow.run(task["task_description"])
-
-            scores = self.score_output(result, task["task_description"])
-
-            result = {
+            return {
                 "task_id": task["task_id"],
                 "task_description": task["task_description"],
                 "success_state": state,
-                "trace": [dataclasses.asdict(event) for event in trace], # for map stage
+                "trace": [dataclasses.asdict(event) for event in trace],
                 "scores": scores,
                 "bug_report": []
             }
 
-            evaluation_results.append(result)
+        with ThreadPoolExecutor() as executor:
+            evaluation_results = list(executor.map(run_eval, self.test_sample))
 
         return evaluation_results
 
@@ -303,22 +384,23 @@ class StemAgent:
             print("[REFLECT]: perfect run. no rules generated")
             return []
 
-        for result in failed_results:
+        def generate_bug_report(target_res):
+            print(f"  [REFLECT][MAP] Generating bug report for task: {target_res['task_id']}...")
             # generate bug report (map)
             ctx = [
                 {
                     "role": "user",
                     "content": get_analyse_exec_trace_prompt(
-                        task_description=result["task_description"],
-                        task_scores=result["scores"],
-                        execution_trace=result["trace"]
+                        task_description=target_res["task_description"],
+                        task_scores=target_res["scores"],
+                        execution_trace=target_res["trace"]
                     )
                 }
             ]
 
             response, _ = self.llm_client.call(
                 context=ctx,
-                label=f"[REFLECT][MAP]: generate bug report for {result['task_id']}",
+                label=f"[REFLECT][MAP]: generate bug report for {target_res['task_id']}",
                 model=self.base_model,
                 response_format=bug_report_schema
             )
@@ -328,13 +410,21 @@ class StemAgent:
             try:
                 parsed_response = json.loads(output_text)
                 bug_report = parsed_response.get("report", [])
+                print(f"[REFLECT][MAP] Task {target_res['task_id']}: Generated {len(bug_report)} bug entries.")
             except json.JSONDecodeError:
-                print(f"[ERROR] Failed to parse bug report for {result['task_id']}")
+                print(f"[ERROR] Failed to parse bug report for {target_res['task_id']}")
                 bug_report = []
 
-            result["bug_report"] = bug_report
+            return bug_report
+
+        with ThreadPoolExecutor() as executor:
+            bug_reports = list(executor.map(generate_bug_report, failed_results))
+
+        for res, report in zip(failed_results, bug_reports):
+            res["bug_report"] = report
 
         # create ledger rules (reduce)
+        print("[REFLECT][REDUCE] Creating ledger rules from bug reports...")
         bugs_summary = []
 
         for result in failed_results:
@@ -373,14 +463,7 @@ class StemAgent:
             parsed_response = json.loads(output_text)
             ledger_rules = parsed_response.get("rules", [])
         except json.JSONDecodeError:
-            print("[ERROR] Failed to parse ledger rules from LLM response.")
             ledger_rules = []
-
-        # debugggg
-        print(f"\n[REFLECT] Generated {len(ledger_rules)} new rules for the Ledger of Truth:")
-        for i, rule in enumerate(ledger_rules, 1):
-            print(f"  {i}. {rule}")
-        #
 
         return ledger_rules
 
