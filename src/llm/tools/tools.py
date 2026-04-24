@@ -48,7 +48,7 @@ CUSTOM_TOOLS = {
     }
 }
 
-BUILTIN_TOOLS = {
+BUILTIN_TOOLfS = {
     "web_search": {
         "type": "web_search"
     },
