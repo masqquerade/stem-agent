@@ -22,7 +22,7 @@ def get_combine_prompt(
     ## 3. Graceful Error Handling
     - In sequential execution, intermediate steps sometimes fail, return errors, or hit dead ends.
     - If the <execution_log> contains errors or missing data, DO NOT copy the errors into the final response. 
-    - Synthesize the valid information you DO have. If the task cannot be fully answered due to a critical step failure, provide the partial answer clearly and state exactly what data could not be retrieved in a professional, user-facing manner.
+    - Synthesize the valithered information you DO have. If the task cannot be fully answered due to a critical step failure, provide the partial answer clearly and state exactly what data could not be retrieved in a professional, user-facing manner.
 
     ## 4. Deduplication
     - Because steps build on each other, later steps often repeat context from earlier steps. Ruthlessly deduplicate the information so the final answer is dense and punchy.

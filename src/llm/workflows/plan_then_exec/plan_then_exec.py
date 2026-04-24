@@ -15,7 +15,8 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
             self.llm_client,
             self.config,
             self.schemas,
-            self.executors
+            self.executors,
+            is_subtask=True
         )
 
         # Generate the plan
@@ -40,20 +41,25 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
 
         # Execute each part using ReAct
         for step in steps:
-            prior_knowledge = f"MASTER OBJECTIVE:\n{task}\n\n"
-
+            prior_knowledge = ""
             if local_ctx:
-                prior_knowledge += "COMPLETED STEPS:\n" + "\n\n".join(local_ctx)
+                prior_knowledge = "\n\n".join(local_ctx)
 
-            res_text, state, _ = react_workflow.run(step, previous_results=prior_knowledge)
+            worker_prompt = f"MASTER OBJECTIVE AND DATA PAYLOADS:\n{task}\n\nSUB-TASK TO EXECUTE:\n{step}"
+
+            res_text, state, _ = react_workflow.run(worker_prompt, previous_results=prior_knowledge)
             self.trace.extend(react_workflow.trace)
             if not state:
                 return res_text, False, self.trace
             local_ctx.append(f"Step: {step}\nResult: {res_text}")
 
         # Combine results and return
+        system_prompt = self.config.system_prompt
+        if self.config.output_format_prompt:
+            system_prompt += f"\n\nFINAL OUTPUT FORMATTING RULES:\n{self.config.output_format_prompt}"
+
         ctx = [
-            {"role": "system", "content": self.config.system_prompt},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": get_combine_prompt(task, local_ctx)

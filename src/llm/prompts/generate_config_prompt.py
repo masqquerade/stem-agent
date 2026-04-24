@@ -32,13 +32,20 @@ def generate_config_init_prompt(
     ## System Architecture Constraints
     1. `mutation_strategy`: You MUST set this exactly to "INITIAL_DESIGN".
     2. `workflow_type`: Select the execution topology (`react`, `plan_then_execute`, `decompose_and_merge`). The Python engine automatically handles the step-by-step routing.
-    3. `system_prompt`: MUST NOT contain step-by-step workflow instructions. Instead, write strict identity rules, formatting constraints, and domain-specific knowledge.
-       - GENERALIZATION: The system_prompt must generalize to ANY task within the problem class, not just the specific example task used in evaluation.
-       - UNCONDITIONAL TOOL USAGE: If the tools list includes search or retrieval tools, you MUST enforce their usage unconditionally. Do not use conditional words like "if" or "when required".
-         * BAD: "Use the web_search tool if you need external information." (The LLM will act lazy and bypass the tool).
-         * GOOD: "You MUST use the web_search tool to gather empirical data and citations BEFORE writing any analysis. Never rely solely on your internal training data."
-    4. `tools`: Select strictly from the available registry: {tool_list}.
-    5. `mutation_log`: Explicitly explain how your chosen workflow, tools, and system prompt resolve the specific baseline failures.
+    3. `system_prompt`: MUST contain identity rules, behavioral heuristics, and domain-specific logic.
+       - NO FORMATTING: MUST NOT contain any rules about final report structure, headers, or formatting.
+       - NO WORKFLOW: MUST NOT contain step-by-step instructions.
+       - DATA-SOURCE PRIORITY RULES: You must explicitly instruct the agent on data gathering:
+         * Priority 1 (Virtual/Closed): If the task provides embedded files or local data (e.g., as Markdown code blocks), the agent MUST use ONLY that data. It is strictly FORBIDDEN to use file-reading tools (like `read_file`) to access data that is already embedded in the prompt.
+         * Priority 2 (Real-world/External): If the task requires external, historical, or current data (e.g., pricing, benchmarks), the agent MUST use the `web_search` tool. Using internal training data for facts is strictly FORBIDDEN.
+         * THE REFLECTION MANDATE: You MUST instruct the agent to explicitly write a short "Data Sourcing Strategy" sentence at the beginning of its first step, identifying whether the data needed is local or external, and confirming which tool (if any) it will use before generating any further analysis.
+         * THE EXECUTION MANDATE: If the task involves coding, simulation, or math, you MUST aggressively instruct the agent that it is FORBIDDEN from just writing out code or numbers in plain text. It MUST execute the `code_interpreter` tool to run the code and verify the results before concluding. Example: "If you need to modify or simulate code, you MUST use the code_interpreter tool to execute it. Never just write out the code and stop."
+         * UNCONDITIONAL WEB_SEARCH MANDATE: If `web_search` is in your selected `tools` list, you MUST write the web_search rule in the system_prompt as an UNCONDITIONAL command — no "if", no "when needed", no "if required". The ONLY correct pattern is: "You MUST use the web_search tool to gather [X] BEFORE writing any analysis. Relying on internal training data is strictly forbidden." Any conditional phrasing ("if external data is needed", "when required", "if the task asks") is BANNED — it allows the agent to bypass the tool using its training knowledge.
+    4. `output_format_prompt`: MUST contain ALL rules for the final response structure (headers, length, tone).
+       - NO LOSSINESS: You MUST instruct the agent to explicitly quote or echo all critical hard numbers and findings from intermediate tool outputs (like code_interpreter results) into the final text.
+    5. `tools`: Select strictly from the available registry: {tool_list}.
+       - BAN ON LOCAL FILE I/O: Because these tasks are run in a virtual sandbox with embedded files, you MUST NOT select `read_file` or `write_file` for your `tools` list. They are strictly banned.
+    6. `mutation_log`: Explicitly explain how your chosen architecture resolves the baseline failures.
 """
 
 
@@ -51,9 +58,6 @@ def generate_config_prompt(
         ledger: str,
 ):
     per_question_scores_str = _format_score_lines(scores, scoring_function)
-
-    # Note: Ensure `parent_config` is formatted cleanly as a string or JSON dump
-    # e.g., parent_config_str = parent_config.model_dump_json(indent=2) if using Pydantic
 
     return f"""
     You are an elite AI System Architect evolving a specialized AI agent for the problem class: {problem_class}.
@@ -73,13 +77,18 @@ def generate_config_prompt(
     1. `mutation_strategy`: You MUST select exactly one strategy from ["ADD_TOOL", "REMOVE_TOOL", "CHANGE_WORKFLOW", "ADJUST_RESOURCES", "PROMPT_REWRITE"].
 
     ## System Architecture Constraints
-    1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`). If the task requires
-    recursive exploration or deep analysis, you MUST select 'react' or 'plan_then_execute'
-    2. `system_prompt`: MUST NOT contain step-by-step workflow instructions. It must only contain identity rules, formatting constraints, and domain heuristics.
-       - GENERALIZATION: The system_prompt must generalize to ANY task within the problem class.
-       - UNCONDITIONAL TOOL USAGE: If the tools list includes search or retrieval tools, you MUST enforce their usage unconditionally. Do not use conditional words like "if" or "when required".
-         * BAD: "Use the web_search tool if you need external information." (The LLM will act lazy and bypass the tool).
-         * GOOD: "You MUST use the web_search tool to gather empirical data and citations BEFORE writing any analysis. Never rely solely on your internal training data."
-    3. `tools`: Select strictly from the available registry: {tool_list}.
-    4. `mutation_log`: You must justify your chosen `mutation_strategy` and state exactly which failing score you expect it to improve based on the Ledger.
+    1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`). 
+    2. `system_prompt`: MUST contain identity rules and behavioral heuristics.
+       - NO FORMATTING: MUST NOT contain final report structure or headers.
+       - DATA-SOURCE PRIORITY RULES: You must explicitly instruct the agent on data gathering:
+         * Priority 1 (Virtual/Closed): If the task provides embedded files or local data (e.g., as Markdown code blocks), the agent MUST use ONLY that data. It is strictly FORBIDDEN to use file-reading tools (like `read_file`) to access data that is already embedded in the prompt.
+         * Priority 2 (Real-world/External): If the task requires external, historical, or current data (e.g., pricing, benchmarks), the agent MUST use the `web_search` tool. Using internal training data for facts is strictly FORBIDDEN.
+         * THE REFLECTION MANDATE: You MUST instruct the agent to explicitly write a short "Data Sourcing Strategy" sentence at the beginning of its first step, identifying whether the data needed is local or external, and confirming which tool (if any) it will use before generating any further analysis.
+         * THE EXECUTION MANDATE: If the task involves coding, simulation, or math, you MUST aggressively instruct the agent that it is FORBIDDEN from just writing out code or numbers in plain text. It MUST execute the `code_interpreter` tool to run the code and verify the results before concluding. Example: "If you need to modify or simulate code, you MUST use the code_interpreter tool to execute it. Never just write out the code and stop."
+         * UNCONDITIONAL WEB_SEARCH MANDATE: If `web_search` is in your selected `tools` list, you MUST write the web_search rule in the system_prompt as an UNCONDITIONAL command — no "if", no "when needed", no "if required". The ONLY correct pattern is: "You MUST use the web_search tool to gather [X] BEFORE writing any analysis. Relying on internal training data is strictly forbidden." Any conditional phrasing ("if external data is needed", "when required", "if the task asks") is BANNED — it allows the agent to bypass the tool using its training knowledge.
+    3. `output_format_prompt`: MUST contain ALL rules for the final response structure.
+       - NO LOSSINESS: You MUST instruct the agent to explicitly quote or echo all critical hard numbers and findings from tool outputs into the final text.
+    4. `tools`: Select strictly from the available registry: {tool_list}.
+       - BAN ON LOCAL FILE I/O: Because these tasks are run in a virtual sandbox with embedded files, you MUST NOT select `read_file` or `write_file` for your `tools` list. They are strictly banned.
+    5. `mutation_log`: Justify your mutation strategy based on the failing scores and the Ledger.
 """

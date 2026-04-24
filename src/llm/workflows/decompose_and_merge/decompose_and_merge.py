@@ -16,7 +16,8 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
             self.llm_client,
             self.config,
             self.schemas,
-            self.executors
+            self.executors,
+            is_subtask=True
         )
 
         # Decompose
@@ -44,9 +45,14 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
                 self.llm_client,
                 self.config,
                 self.schemas,
-                self.executors
+                self.executors,
+                is_subtask=True
             )
-            result, state, _ = worker_workflow.run(subtask["worker_prompt"])
+
+            # Prepend original task to subtask to ensure virtual files/payloads are available
+            worker_prompt = f"MASTER OBJECTIVE AND DATA PAYLOADS:\n{task}\n\nSUB-TASK TO EXECUTE:\n{subtask['worker_prompt']}"
+
+            result, state, _ = worker_workflow.run(worker_prompt)
             return {
                 "task": subtask["task"],
                 "result": result,
@@ -64,8 +70,12 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
                 return res["result"], False, self.trace
             results.append(f"Subtask: {res['task']}\nResult: {res['result']}")
 
+        system_prompt = self.config.system_prompt
+        if self.config.output_format_prompt:
+            system_prompt += f"\n\nFINAL OUTPUT FORMATTING RULES:\n{self.config.output_format_prompt}"
+
         merge_ctx = [
-            {"role": "system", "content": self.config.system_prompt},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": get_merge_prompt(task, results)

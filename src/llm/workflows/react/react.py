@@ -7,6 +7,10 @@ from src.llm.workflows.helpers.sanitizer import sanitize_payload
 
 
 class ReactWorkflow(BaseWorkflow):
+    def __init__(self, *args, is_subtask: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.is_subtask = is_subtask
+
     def run(self, task: str, previous_results: str = "") -> tuple[str, bool, list[TraceEvent]]:
         self.trace = []
         content = task
@@ -18,8 +22,12 @@ class ReactWorkflow(BaseWorkflow):
             "content": content
         }
 
+        system_prompt = self.config.system_prompt
+        if not self.is_subtask and self.config.output_format_prompt:
+            system_prompt += f"\n\nFINAL OUTPUT FORMATTING RULES:\n{self.config.output_format_prompt}"
+
         context = [
-            {"role": "system", "content": self.config.system_prompt},
+            {"role": "system", "content": system_prompt},
             user_input
         ]
 
@@ -36,7 +44,7 @@ class ReactWorkflow(BaseWorkflow):
 
             executions = []
             for item in response.output:
-                if item.type.endswith("_call") and item.type != "function_call":
+                if item.type != "function_call":
                     args = sanitize_payload(item)
 
                     summary_text = "[NATIVE LLM CALL]"

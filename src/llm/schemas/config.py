@@ -32,11 +32,13 @@ generate_config_schema = {
             },
             "temperature": { "type": "number" },
             "max_steps": { "type": "integer" },
+            "output_format_prompt": { "type": "string" },
         },
         "required": [
             "mutation_strategy", "workflow_type",
             "system_prompt", "tools",
-            "temperature", "max_steps", "mutation_log"
+            "temperature", "max_steps", "mutation_log",
+            "output_format_prompt"
         ],
         "additionalProperties": False
     }

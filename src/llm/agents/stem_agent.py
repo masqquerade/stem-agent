@@ -79,13 +79,12 @@ class StemAgent:
             print(f"  => temperature:        {config.temperature}")
             print(f"  => max_steps:          {config.max_steps}")
             print(f"  => mutation_log:       {config.mutation_log[:200]}...")
-            print(f"  => system_prompt:      {config.system_prompt}")
 
             # Evaluate
             eval_results = self._evaluate()
-            print(f"  => Evaluation: {json.dumps(eval_results, indent=2)}")
 
             config.score = sum(res["scores"].get("overall", 0) for res in eval_results) / max(len(eval_results), 1)
+            print(f"  => Score: {config.score:.2f}")
 
             # Reflect
             print("Reflecting...")
@@ -105,21 +104,20 @@ class StemAgent:
         best_config = max(self.config_archive, key=lambda cfg: getattr(cfg, "score", 0.0))
         self.config = best_config
 
-        schemas, executors = get_tools(best_config.tools)
-        agent_workflow = WORKFLOWS[best_config.workflow_type](
+        return self.execute_task(self.target.initial_task_description)
+
+    def execute_task(self, task_description: str) -> tuple[str, dict]:
+        schemas, executors = get_tools(self.config.tools)
+
+        agent_workflow = WORKFLOWS[self.config.workflow_type](
             llm_client=self.llm_client,
-            config=best_config,
+            config=self.config,
             schemas=schemas,
             executors=executors
         )
 
-        task_result, state, _ = agent_workflow.run(self.target.initial_task_description)
-
-        result_scoring = self.score_output(
-            task_result,
-            self.target.initial_task_description
-        )
-
+        task_result, state, _ = agent_workflow.run(task_description)
+        result_scoring = self.score_output(task_result, task_description)
         print(f"Execution complete. State: {state}")
 
         return task_result, result_scoring
@@ -179,7 +177,6 @@ class StemAgent:
         scores = {}
 
         def judge_question(question):
-            print(f"  [SCORING] Judging question: {question['id']}...")
             user_prompt = get_scoring_judge_user_prompt(
                 question["question"],
                 output,
@@ -203,7 +200,6 @@ class StemAgent:
 
             answer = response.output_text.strip().upper()
             score = 1 if answer.startswith("YES") else 0
-            print(f"  [SCORING] Question {question['id']} result: {'YES' if score == 1 else 'NO'}")
             return question["id"], score
 
         with ThreadPoolExecutor() as executor:
@@ -255,7 +251,6 @@ class StemAgent:
             tools=schemas,
             temperature=0.3,
         )
-        print(f"baseline: {response.output_text}")
         return response.output_text
 
     def _prepare(self):
@@ -273,7 +268,6 @@ class StemAgent:
 
         self.baseline_scoring = scoring
 
-    # Generation (set self.current_config)
     def _generate(self, iteration: int) -> AgentConfig:
         if iteration == 0:
             return self._generate_initial()
@@ -345,13 +339,7 @@ class StemAgent:
         return config
 
     def _evaluate(self):
-        allowed_tools = []
-
-        for tool in self.current_config.tools:
-            if tool not in ["read_file", "write_file"]:
-                allowed_tools.append(tool)
-
-        schemas, executors = get_tools(allowed_tools)
+        schemas, executors = get_tools(self.current_config.tools)
 
         def run_eval(task):
             agent_workflow = WORKFLOWS[self.current_config.workflow_type](
@@ -391,7 +379,6 @@ class StemAgent:
             return []
 
         def generate_bug_report(target_res):
-            print(f"  [REFLECT][MAP] Generating bug report for task: {target_res['task_id']}...")
             # generate bug report (map)
             ctx = [
                 {
@@ -416,7 +403,6 @@ class StemAgent:
             try:
                 parsed_response = json.loads(output_text)
                 bug_report = parsed_response.get("report", [])
-                print(f"[REFLECT][MAP] Task {target_res['task_id']}: Generated {len(bug_report)} bug entries.")
             except json.JSONDecodeError:
                 print(f"[ERROR] Failed to parse bug report for {target_res['task_id']}")
                 bug_report = []

@@ -17,5 +17,7 @@ def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 1)
 
     STRUCTURAL MIRRORING: If the original task involves reading multiple files with import relationships (e.g., code review, codebase audit), your test tasks MUST also embed multi-file virtual codebases where files reference each other. Do not flatten everything into a single file — preserve the cross-file structure so the agent must reason across multiple provided files.
 
+    DATA SOURCE MIRRORING: If the original task requires the agent to search for external information (e.g., threat intelligence, current events, market data, recent advisories), your test tasks MUST also require external data gathering. Do NOT embed all the answers inline — write tasks that require the agent to actively research and retrieve information using web search. A test task that provides all answers in the prompt cannot test whether the agent can gather and verify external data.
+
     Output a JSON array of {tasks_count} tasks. For each task, provide a `task_description` (the prompt the agent will receive) and a `diversity_justification` (a 1-sentence explanation of what specific capability this task tests compared to the others).   
 """
