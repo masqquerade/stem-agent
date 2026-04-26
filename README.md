@@ -42,11 +42,11 @@ The system will then:
 3. Run up to 3 evolution iterations (generate config → evaluate → reflect)
 4. Execute the original task with the best discovered config and print the result
 
-After the initial task completes, you can submit follow-up tasks in the same problem class. The evolution loop does not re-run. The already-discovered config is reused:
+After the initial task completes, you can submit additional tasks in the same problem class. The evolution loop does not re-run — the already-discovered config is reused. Each task is executed independently with no memory of previous tasks, so each prompt must be self-contained:
 
 ```
 ---
-Next task (or 'exit'): Now do the same comparison but focus on multilingual datasets
+Next task (or 'exit'): Compare SPLADE vs BM25 retrieval on biomedical corpora; include recall@10 benchmarks and a cost estimate for 1M queries.
 ```
 
 Type `exit` to quit.

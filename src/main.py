@@ -25,7 +25,7 @@ def main():
     while True:
         print("\n---")
         next_task = input("Next task (or 'exit'): ").strip()
-        if next_task.lower() == "exit":
+        if not next_task or next_task.lower() == "exit":
             break
 
         result, scoring = agent.execute_task(next_task)

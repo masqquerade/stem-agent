@@ -93,7 +93,8 @@ class LLMClient:
         latency_ms = int((time.perf_counter() - start) * 1000)
         
         has_tool_calls = any(
-            item.type == "function_call" for item in response.output
+            item.type in ("function_call", "web_search_call", "code_interpreter_call")
+            for item in response.output
         )
 
         record = LLMCallRecord(
