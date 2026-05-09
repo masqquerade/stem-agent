@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from src.llm.agents.helpers.aggregated_scores_creator import create_aggregated_scores
 from src.llm.api.llm_client import LLMClient, execute_tools
+import src.llm.logger as logger
 from src.llm.config.agent_config import AgentConfig
 from src.llm.prompts.analyse_exec_trace_prompt import get_analyse_exec_trace_prompt
 from src.llm.prompts.create_test_tasks_prompt import create_test_task_prompt
@@ -65,41 +66,34 @@ class StemAgent:
             if self.config is not None:
                 break
 
-            print(f"Config building iteration: {iteration}")
-
             # Generate
-            print("Generating config...")
+            logger.phase(f"GENERATE  [iter {iteration}]")
             config = self._generate(iteration)
             self.current_config = config
             self.config_archive.append(config)
-
-            print(f"  => workflow_type:      {config.workflow_type}")
-            print(f"  => mutation_strategy:  {config.mutation_strategy}")
-            print(f"  => tools:              {config.tools}")
-            print(f"  => temperature:        {config.temperature}")
-            print(f"  => max_steps:          {config.max_steps}")
-            print(f"  => mutation_log:       {config.mutation_log[:200]}...")
+            logger.config_summary(config, iteration)
 
             # Evaluate
+            logger.phase(f"EVALUATE  [iter {iteration}]")
             eval_results = self._evaluate()
 
             config.score = sum(res["scores"].get("overall", 0) for res in eval_results) / max(len(eval_results), 1)
-            print(f"  => Score: {config.score:.2f}")
+            logger.eval_summary(eval_results, self.scoring_function)
 
             # Reflect
-            print("Reflecting...")
+            logger.phase(f"REFLECT  [iter {iteration}]")
             ledger_rules = self.reflect(eval_results)
-
-            if ledger_rules:
-                self.ledger.extend(ledger_rules)
-                print(f"  => Ledger updated with {len(ledger_rules)}")
+            self.ledger.extend(ledger_rules)
+            logger.ledger_update(ledger_rules, self.ledger)
 
             if config.score >= 1.0:
-                print("Perfect score achieved.")
+                print("\n  Perfect score achieved — stopping early.")
                 break
 
+        logger.run_summary(self.baseline_scoring["overall"], self.config_archive)
+
         # Execute user's task
-        print("Executing user's task with generated config")
+        logger.phase("EXECUTE  user task")
 
         best_config = max(self.config_archive, key=lambda cfg: getattr(cfg, "score", 0.0))
         self.config = best_config
@@ -118,7 +112,7 @@ class StemAgent:
 
         task_result, state, _ = agent_workflow.run(task_description)
         result_scoring = self.score_output(task_result, task_description)
-        print(f"Execution complete. State: {state}")
+        logger.score_table(result_scoring, self.scoring_function, "final task")
 
         return task_result, result_scoring
 
@@ -142,6 +136,7 @@ class StemAgent:
         result = json.loads(response.output_text)
 
         self.scoring_function = result["binary_questions"]
+        logger.scoring_function(self.scoring_function)
         return self.scoring_function
 
     def _build_test_sample(self):
@@ -209,7 +204,6 @@ class StemAgent:
             scores[q_id] = score
 
         scores["overall"] = sum(scores.values()) / len(self.scoring_function)
-        print(f"  [SCORING] AVG: {scores['overall']}")
         return scores
 
     def run_baseline(self):
@@ -254,19 +248,21 @@ class StemAgent:
         return response.output_text
 
     def _prepare(self):
-        print("Building scoring function...")
+        logger.phase("SENSE")
+        print("  Building scoring function...")
         self.build_scoring_function()
 
-        print("Building test sample...")
+        print("  Building test sample...")
         self._build_test_sample()
+        print(f"  {len(self.test_sample)} test task(s) generated")
 
-        print("Running baseline...")
+        print("  Running baseline...")
         baseline_output = self.run_baseline()
 
-        print("Scoring baseline...")
+        print("  Scoring baseline...")
         scoring = self.score_output(baseline_output)
-
         self.baseline_scoring = scoring
+        logger.score_table(scoring, self.scoring_function, "baseline")
 
     def _generate(self, iteration: int) -> AgentConfig:
         if iteration == 0:
@@ -375,7 +371,6 @@ class StemAgent:
                 failed_results.append(result)
 
         if not failed_results:
-            print("[REFLECT]: perfect run. no rules generated")
             return []
 
         def generate_bug_report(target_res):
@@ -404,7 +399,7 @@ class StemAgent:
                 parsed_response = json.loads(output_text)
                 bug_report = parsed_response.get("report", [])
             except json.JSONDecodeError:
-                print(f"[ERROR] Failed to parse bug report for {target_res['task_id']}")
+                logger.error("bug report parse", f"task {target_res['task_id']}")
                 bug_report = []
 
             return bug_report
@@ -416,7 +411,6 @@ class StemAgent:
             res["bug_report"] = report
 
         # create ledger rules (reduce)
-        print("[REFLECT][REDUCE] Creating ledger rules from bug reports...")
         bugs_summary = []
 
         for result in failed_results:
@@ -455,6 +449,7 @@ class StemAgent:
             parsed_response = json.loads(output_text)
             ledger_rules = parsed_response.get("rules", [])
         except json.JSONDecodeError:
+            logger.error("ledger rules parse", "json decode failed")
             ledger_rules = []
 
         return ledger_rules

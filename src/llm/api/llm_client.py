@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 from src.llm.tools.tools import BUILTIN_TOOLS
+import src.llm.logger as logger
 
 
 @dataclass
@@ -31,13 +32,12 @@ def execute_tools(
         if item.type == "function_call":
             try:
                 args = json.loads(getattr(item, "arguments", "{}"))
-                print(f"  [TOOL CALL]: {item.name}({args})")
+                logger.tool_call(item.name, args)
                 result = executors[item.name](**args)
                 output = str(result)
-                print(f"  [TOOL OUTPUT][{item.name}]: {output[:200]}...")
             except Exception as e:
                 output = f"Error: {e}"
-                print(f"  [TOOL ERROR][{item.name}]: {e}")
+                logger.tool_error(item.name, str(e))
 
             return {
                 "type": "function_call_output",
@@ -93,7 +93,7 @@ class LLMClient:
         latency_ms = int((time.perf_counter() - start) * 1000)
         
         has_tool_calls = any(
-            item.type in ("function_call", "web_search_call", "code_interpreter_call")
+            item.type == "function_call"
             for item in response.output
         )
 

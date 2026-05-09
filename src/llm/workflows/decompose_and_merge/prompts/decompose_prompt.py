@@ -14,9 +14,10 @@ def get_decompose_prompt(task: str):
     ## 2. Dynamic Scaling (Complexity Matching)
     - If the <task> is broad and complex, return 2 to 5 sub-tasks. Do not exceed 5.
 
-    ## 3. MECE Principle
-    - Mutually Exclusive: Sub-tasks should not overlap in scope. Do not waste compute having two agents research the same thing.
+    ## 3. MECE Principle (Mutually Exclusive, Collectively Exhaustive)
+    - Mutually Exclusive: Sub-tasks should not overlap in scope. Do not waste compute having two agents research the same thing. If the task has multiple components (e.g. A vs B), assign each component to a different worker.
     - Collectively Exhaustive: When the outputs of all sub-tasks are combined, they must contain 100% of the information needed to satisfy the original <task>.
+    - DIVERSIFICATION MANDATE: You are FORBIDDEN from generating identical or highly similar worker instructions. Each sub-task MUST represent a distinct investigative angle.
 
     ## 4. Actionable Worker Instructions
     - For each sub-task, provide a `worker_prompt`. This must be a highly specific, standalone instruction for the worker agent. The worker will not see the <task>; it will only see your `worker_prompt`.

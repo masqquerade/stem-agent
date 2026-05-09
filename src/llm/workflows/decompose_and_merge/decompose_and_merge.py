@@ -2,6 +2,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 from src.llm.workflows.base import BaseWorkflow, TraceEvent
+import src.llm.logger as logger
 from src.llm.workflows.decompose_and_merge.prompts.decompose_prompt import get_decompose_prompt
 from src.llm.workflows.decompose_and_merge.prompts.merge_prompt import get_merge_prompt
 from src.llm.workflows.decompose_and_merge.schemas.decompose_schema import decompose_schema
@@ -38,6 +39,7 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
         )
 
         subtasks = json.loads(response.output_text)["subtasks"]
+        print(f"  [decompose_and_merge] {len(subtasks)} subtask(s) — running in parallel")
 
         def run_subtask(subtask):
             # Create a fresh workflow instance for each thread
@@ -64,11 +66,15 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
             worker_results = list(executor.map(run_subtask, subtasks))
 
         results = []
+        any_failed = False
         for res in worker_results:
             self.trace.extend(res["trace"])
-            if not res["state"]:
-                return res["result"], False, self.trace
             results.append(f"Subtask: {res['task']}\nResult: {res['result']}")
+            if not res["state"]:
+                any_failed = True
+
+        if any_failed:
+            logger.workflow_result("decompose_and_merge", len(self.trace), self.config.max_steps, False)
 
         system_prompt = self.config.system_prompt
         if self.config.output_format_prompt:
@@ -89,4 +95,6 @@ class DecomposeAndMergeWorkflow(BaseWorkflow):
             temperature=self.config.temperature,
         )
 
-        return merged.output_text, True, self.trace
+        final_state = not any_failed
+        logger.workflow_result("decompose_and_merge", len(self.trace), self.config.max_steps, final_state)
+        return merged.output_text, final_state, self.trace

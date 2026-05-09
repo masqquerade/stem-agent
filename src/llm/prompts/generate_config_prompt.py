@@ -31,10 +31,14 @@ def generate_config_init_prompt(
 
     ## System Architecture Constraints
     1. `mutation_strategy`: You MUST set this exactly to "INITIAL_DESIGN".
-    2. `workflow_type`: Select the execution topology (`react`, `plan_then_execute`, `decompose_and_merge`). The Python engine automatically handles the step-by-step routing.
+    2. `workflow_type`: Select the execution topology:
+       - `react`: Best for sequential discovery and deep reasoning chains where each step depends on the previous one.
+       - `plan_then_execute`: Best for structured, predictable research where the required steps can be known upfront.
+       - `decompose_and_merge`: Best for broad, multi-faceted problems requiring parallel investigation across distinct domains to save time.
     3. `system_prompt`: MUST contain identity rules, behavioral heuristics, and domain-specific logic.
        - NO FORMATTING: MUST NOT contain any rules about final report structure, headers, or formatting.
        - NO WORKFLOW: MUST NOT contain step-by-step instructions.
+       - DOMAIN PERSONA & ANALYTICAL FRAMEWORK: You MUST define how this specialist thinks. Instruct the agent to use specific methodologies relevant to the domain (e.g., 'Use the STRIDE threat model', 'Apply first-principles thinking', 'Cross-reference financial filings'). It must not just be a generic assistant; it must have a specialized mental model.
        - DATA-SOURCE PRIORITY RULES: You must explicitly instruct the agent on data gathering:
          * Priority 1 (Virtual/Closed): If the task provides embedded files or local data (e.g., as Markdown code blocks), the agent MUST use ONLY that data. It is strictly FORBIDDEN to use file-reading tools (like `read_file`) to access data that is already embedded in the prompt.
          * Priority 2 (Real-world/External): If the task requires external, historical, or current data (e.g., pricing, benchmarks), the agent MUST use the `web_search` tool. Using internal training data for facts is strictly FORBIDDEN.
@@ -75,11 +79,17 @@ def generate_config_prompt(
 
     ## Evolving the Architecture
     1. `mutation_strategy`: You MUST select exactly one strategy from ["ADD_TOOL", "REMOVE_TOOL", "CHANGE_WORKFLOW", "ADJUST_RESOURCES", "PROMPT_REWRITE"].
+       - AVOID REPETITION: If the Ledger indicates that previous iterations failed despite prompt rewrites, you MUST select a structural mutation like `CHANGE_WORKFLOW` or `ADD_TOOL` instead of attempting another `PROMPT_REWRITE`.
 
     ## System Architecture Constraints
-    1. `workflow_type`: The Python engine handles the step-by-step routing (`react`, `plan_then_execute`, `decompose_and_merge`). 
+    1. `workflow_type`: Select the execution topology:
+       - `react`: Best for sequential discovery and deep reasoning chains where each step depends on the previous one.
+       - `plan_then_execute`: Best for structured, predictable research where the required steps can be known upfront.
+       - `decompose_and_merge`: Best for broad, multi-faceted problems requiring parallel investigation across distinct domains to save time.
     2. `system_prompt`: MUST contain identity rules and behavioral heuristics.
        - NO FORMATTING: MUST NOT contain final report structure or headers.
+       - DOMAIN PERSONA & ANALYTICAL FRAMEWORK: You MUST define how this specialist thinks. Instruct the agent to use specific methodologies relevant to the domain (e.g., 'Use the STRIDE threat model', 'Apply first-principles thinking', 'Cross-reference financial filings'). It must not just be a generic assistant; it must have a specialized mental model.
+       - DOMAIN GENERALIZATION: Your rules MUST NOT hardcode specific entities, topics, or subjects from the test tasks. The agent must remain a specialist for the broader problem class, not overfit to a single task's data.
        - DATA-SOURCE PRIORITY RULES: You must explicitly instruct the agent on data gathering:
          * Priority 1 (Virtual/Closed): If the task provides embedded files or local data (e.g., as Markdown code blocks), the agent MUST use ONLY that data. It is strictly FORBIDDEN to use file-reading tools (like `read_file`) to access data that is already embedded in the prompt.
          * Priority 2 (Real-world/External): If the task requires external, historical, or current data (e.g., pricing, benchmarks), the agent MUST use the `web_search` tool. Using internal training data for facts is strictly FORBIDDEN.

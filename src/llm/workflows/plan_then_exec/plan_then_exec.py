@@ -1,6 +1,7 @@
 import json
 
 from src.llm.workflows.base import BaseWorkflow, TraceEvent
+import src.llm.logger as logger
 from src.llm.workflows.plan_then_exec.prompts.combine_prompt import get_combine_prompt
 from src.llm.workflows.plan_then_exec.prompts.get_plan_prompt import get_plan_prompt
 from src.llm.workflows.plan_then_exec.schemas.generate_plan_schema import generate_plan_pte_schema
@@ -37,7 +38,9 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
         )
 
         steps = json.loads(response.output_text)["steps"]
+        print(f"  [plan_then_execute] {len(steps)} step(s) planned")
         local_ctx = []
+        state = True
 
         # Execute each part using ReAct
         for step in steps:
@@ -49,9 +52,10 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
 
             res_text, state, _ = react_workflow.run(worker_prompt, previous_results=prior_knowledge)
             self.trace.extend(react_workflow.trace)
-            if not state:
-                return res_text, False, self.trace
             local_ctx.append(f"Step: {step}\nResult: {res_text}")
+            if not state:
+                logger.workflow_result("plan_then_execute", len(self.trace), self.config.max_steps, False)
+                break
 
         # Combine results and return
         system_prompt = self.config.system_prompt
@@ -73,5 +77,6 @@ class PlanThenExecuteWorkflow(BaseWorkflow):
             temperature=self.config.temperature
         )
 
-        return combination.output_text, True, self.trace
+        logger.workflow_result("plan_then_execute", len(self.trace), self.config.max_steps, state)
+        return combination.output_text, state, self.trace
 

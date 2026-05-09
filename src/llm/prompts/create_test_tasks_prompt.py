@@ -1,4 +1,4 @@
-def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 1):
+def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 5):
     return f"""
     You are an elite Benchmark Engineer. Your objective is to create a robust, generalized test suite for an AI agent operating in the following problem class: {problem_class}.
 
@@ -8,7 +8,7 @@ def create_test_task_prompt(task: str, problem_class: str, tasks_count: int = 1)
     You must generate exactly {tasks_count} test tasks. 
     Rules for the test suite:
     1. HOLD OUT THE ORIGINAL: Do not include the user's original task. The agent will only see that at the very end of its evolution.
-    2. FORCE DIVERSITY: The {tasks_count} tasks must test different edges of the problem class. Vary the length, the required depth, the tone, and the constraints. 
+    2. FORCE DIVERSITY BUT MAINTAIN DOMAIN: The {tasks_count} tasks must test different edges of the problem class. Vary the length, the required depth, the tone, and the constraints. HOWEVER, they MUST remain strictly within the exact same specific sub-domain or subject matter as the original task. Do not drift to completely different topics within the problem class (e.g., if the task is about NLP frameworks, do not create tasks about distributed databases).
     3. REALISM: The tasks must look like real user prompts, not robotic instructions.
     
     ENVIRONMENTAL CONSTRAINT: This environment is a sandbox. Tasks must be fully self-contained.

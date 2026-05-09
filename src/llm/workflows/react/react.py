@@ -4,6 +4,7 @@ from src.llm.api.llm_client import execute_tools
 from src.llm.compression.tool_calling_compressor import compress_tool_output
 from src.llm.workflows.base import BaseWorkflow, TraceEvent, ToolExecution
 from src.llm.workflows.helpers.sanitizer import sanitize_payload
+import src.llm.logger as logger
 
 
 class ReactWorkflow(BaseWorkflow):
@@ -34,7 +35,6 @@ class ReactWorkflow(BaseWorkflow):
         response = None
 
         for step in range(self.config.max_steps):
-            print(f"  [ReAct] Step {step}/{self.config.max_steps}")
             response, record = self.llm_client.call_agentic(
                 context=context,
                 label=f"[GENERATE][ReAct]: step {step}",
@@ -52,7 +52,13 @@ class ReactWorkflow(BaseWorkflow):
                     if item.type == "web_search_call":
                         action = args.get("action", {})
                         if action is not None:
-                            summary_text = f"[web_search_tool] Action: {action.get('type', 'unknown')} - Queries: {action.get('search_queries', [])}"
+                            queries = action.get("queries", [])
+                            if not queries and "query" in action:
+                                queries = [action.get("query")]
+                            summary_text = f"[web_search_tool] Action: {action.get('type', 'unknown')} - Queries: {queries}"
+                            logger.tool_call("web_search", {"queries": queries})
+                    elif item.type == "code_interpreter_call":
+                        logger.tool_call("code_interpreter", {})
 
                     executions.append(ToolExecution(
                         name=item.type,
@@ -63,6 +69,8 @@ class ReactWorkflow(BaseWorkflow):
 
             if not record.has_tool_calls:
                 self._record_step(step, response, executions)
+                if not self.is_subtask:
+                    logger.workflow_result("react", step + 1, self.config.max_steps, True)
                 return response.output_text, True, self.trace
 
             tool_outputs = execute_tools(
@@ -102,9 +110,12 @@ class ReactWorkflow(BaseWorkflow):
             context = context + list(response.output) + api_tool_outputs
 
         if response is None:
+            logger.error("react", "no response produced")
             return "ERROR WHILE REACTING", False, self.trace
 
         # task may be incomplete cause of lack of steps -> False
+        if not self.is_subtask:
+            logger.workflow_result("react", self.config.max_steps, self.config.max_steps, False)
         return getattr(response, "output_text", "Error"), False, self.trace
 
     def _record_step(self, step: int, response, executions: list[ToolExecution]):

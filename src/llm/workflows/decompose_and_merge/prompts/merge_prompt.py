@@ -15,7 +15,8 @@ def get_merge_prompt(task, worker_outputs: list[str]):
 
     ## 2. Cohesion and Deduplication
     - DO NOT simply concatenate the worker outputs. You must rewrite and weave the information into a single unified narrative or logical structure.
-    - Workers likely found overlapping information. Deduplicate all repeated facts or arguments. The final output must read as if it were written by a single expert.
+    - NO-LOSS INFORMATION MANDATE: You are FORBIDDEN from losing specific data points, quantitative evidence, or unique identifiers found by the workers. If a worker found a specific benchmark, price, or technical metric, it MUST appear in your final response.
+    - Deduplicate repeated facts, but ensure that any conflicting or varied data points are preserved and contrasted.
 
     ## 3. Conflict Resolution
     - If workers provide contradictory data or conflicting arguments, DO NOT hallucinate a compromise. 

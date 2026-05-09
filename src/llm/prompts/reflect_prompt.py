@@ -32,6 +32,7 @@ def get_reflect_prompt(
     A Ledger Rule MUST be:
     - Causal: "Because we used workflow X, problem Y occurred..."
     - Actionable: "...therefore, future mutations must use tool Z or prompt constraint W."
+    - Domain-General (ANTI-DRIFT MANDATE): The rule MUST apply to the entire problem class. It MUST NOT mention specific entities, names, or localized data from the test tasks. If a rule only fixes a quirk of one specific task, discard it.
     - Specific: Never write vague rules like "improve reasoning." 
 
     Output a strict JSON array of these string rules.   
