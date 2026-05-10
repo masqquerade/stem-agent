@@ -16,6 +16,7 @@ def generate_config_init_prompt(
         baseline_score: float,
         scores: dict,
         scoring_function: list,
+        
         tool_list: list
 ):
     failed_questions_str = _format_score_lines(scores, scoring_function, failed_only=True)

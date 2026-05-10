@@ -1,6 +1,12 @@
+import json
+
+from src.db.db import VectorDatabase
+
+
 def read_file(path: str) -> str:
     with open(path, 'r') as f:
         return f.read()[:50000]
+
 
 def write_file(path: str, content: str) -> str:
     import os
@@ -8,6 +14,10 @@ def write_file(path: str, content: str) -> str:
     with open(path, 'w') as f:
         f.write(content)
     return f"Wrote {len(content)} bytes to {path}"
+
+
+
+
 
 CUSTOM_TOOLS = {
     "read_file": {
@@ -45,7 +55,7 @@ CUSTOM_TOOLS = {
             },
             "strict": True
         }
-    }
+    },
 }
 
 BUILTIN_TOOLS = {
@@ -57,13 +67,41 @@ BUILTIN_TOOLS = {
     },
 }
 
-def get_tools(tool_names: list[str]) -> tuple[list, dict]:
+SEARCH_KB_SCHEMA = {
+    "type": "function",
+    "name": "search_knowledge_base",
+    "description": "Search internal knowledge base for relevant information",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "n_results": {"type": "integer"}
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+    "strict": True
+}
+
+def make_search_tool(db: VectorDatabase):
+    def search_knowledge_base(query: str, n_results: int = 3) -> str:
+        result = db.query([query], n_results=n_results)
+        return json.dumps(result, indent=2)
+    return search_knowledge_base
+
+def get_tools(tool_names: list[str], db: VectorDatabase = None) -> tuple[list, dict]:
     schemas = []
     executors = {}
 
     for name in tool_names:
         if name in BUILTIN_TOOLS:
             schemas.append(BUILTIN_TOOLS[name])
+
+        elif name == "search_knowledge_base":
+            if db is None:
+                raise ValueError("db instance in required")
+            schemas.append(SEARCH_KB_SCHEMA)
+            executors["search_knowledge_base"] = make_search_tool(db)
 
         if name in CUSTOM_TOOLS:
             schemas.append(CUSTOM_TOOLS[name]["schema"])

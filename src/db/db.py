@@ -1,4 +1,5 @@
 import chromadb
+from chromadb.api.types import Metadata
 from dataclasses import dataclass
 
 @dataclass
@@ -10,7 +11,7 @@ class Document:
 class QueryResult:
     id: str
     document: str
-    metadata: dict
+    metadata: Metadata
     distance: float
 
 class VectorDatabase:
@@ -30,14 +31,18 @@ class VectorDatabase:
             ]
         )
 
-    def query(self, query_texts: list[str]) -> list[QueryResult]:
+    def query(self, query_texts: list[str], n_results: int = 3) -> list[list[QueryResult]]:
+        n_results = min(n_results, self.collection.count())
+        if n_results == 0:
+            return [[] for _ in query_texts]
         results = []
 
         raw = self.collection.query(
-            query_texts=query_texts
+            query_texts=query_texts,
+            n_results=n_results
         )
 
-        for batch_ids, batch_docs, batch_metas, batch_dists in zip(raw["ids"], raw["documents"]):
+        for batch_ids, batch_docs, batch_metas, batch_dists in zip(raw["ids"], raw["documents"], raw["metadatas"], raw["distances"]):
             batch = [
                 QueryResult(id=_id, document=doc, metadata=meta, distance=dist)
                 for _id, doc, meta, dist in zip(batch_ids, batch_docs, batch_metas, batch_dists)

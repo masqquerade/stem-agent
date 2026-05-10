@@ -1,0 +1,7 @@
+Pagination is mandatory for collection endpoints. Use cursor-based pagination for large datasets
+(more stable than offset when data changes frequently). Offset pagination (/users?offset=0&limit=20)
+is simpler but can miss or duplicate items on concurrent writes. Always include total count and
+next/previous links in paginated responses. ETags enable conditional requests — client caches
+the ETag, sends If-None-Match on next request, server returns 304 Not Modified if unchanged.
+Rate limiting should return 429 Too Many Requests with Retry-After header. Compression: always
+support gzip for response bodies. Field filtering (/users?fields=id,name) reduces payload size.

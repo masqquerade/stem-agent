@@ -1,0 +1,8 @@
+HTTP status codes must be used correctly. 200 OK for successful GET/PUT. 201 Created for
+successful POST that creates a resource, include Location header pointing to the new resource.
+204 No Content for successful DELETE. 400 Bad Request for malformed input — include a body
+explaining what is wrong. 401 Unauthorized means not authenticated. 403 Forbidden means
+authenticated but not authorized. 404 Not Found for missing resources. 409 Conflict for
+state conflicts (duplicate creation). 422 Unprocessable Entity for validation failures.
+500 Internal Server Error should never expose stack traces in production.
+Error response bodies should follow a consistent schema: {error: string, code: string, details: []}.

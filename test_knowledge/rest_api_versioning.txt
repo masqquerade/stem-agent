@@ -1,0 +1,6 @@
+API versioning strategies: URI versioning (/api/v1/users) is the most common and explicit.
+Header versioning uses Accept: application/vnd.api+json;version=1 — cleaner URLs but harder
+to test in a browser. Query parameter versioning (/api/users?version=1) is discouraged in
+production. Semantic versioning applies: major versions break backwards compatibility, minor
+versions add features, patch versions fix bugs. Never remove fields from responses without
+a deprecation period. Always support at least one previous major version simultaneously.

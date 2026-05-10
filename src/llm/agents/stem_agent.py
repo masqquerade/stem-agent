@@ -3,6 +3,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from src.db.db import VectorDatabase
 from src.llm.agents.helpers.aggregated_scores_creator import create_aggregated_scores
 from src.llm.api.llm_client import LLMClient, execute_tools
 import src.llm.logger as logger
@@ -43,8 +44,9 @@ class StemAgent:
             self,
             api_key: str,
             target: Target,
+            db: VectorDatabase,
             th_model: str = "o3-mini",
-            base_model: str = "gpt-4o"
+            base_model: str = "gpt-4o",
     ):
         self.llm_client = LLMClient(api_key=api_key)
         self.target = target
@@ -57,6 +59,7 @@ class StemAgent:
         self.current_config: AgentConfig | None = None
         self.ledger: list[str] = []
         self.config: AgentConfig | None = None
+        self.db = db
 
     def run(self, max_iters: int = 3):
         self._prepare()
@@ -78,6 +81,15 @@ class StemAgent:
             eval_results = self._evaluate()
 
             config.score = sum(res["scores"].get("overall", 0) for res in eval_results) / max(len(eval_results), 1)
+
+            # Aggregate per-question pass rates so _generate_mutation has real signal
+            q_ids = [q["id"] for q in self.scoring_function]
+            n = max(len(eval_results), 1)
+            config.scoring = {
+                qid: sum(r["scores"].get(qid, 0) for r in eval_results) / n
+                for qid in q_ids
+            }
+
             logger.eval_summary(eval_results, self.scoring_function)
 
             # Reflect
@@ -101,7 +113,7 @@ class StemAgent:
         return self.execute_task(self.target.initial_task_description)
 
     def execute_task(self, task_description: str) -> tuple[str, dict]:
-        schemas, executors = get_tools(self.config.tools)
+        schemas, executors = get_tools(self.config.tools, db=self.db)
 
         agent_workflow = WORKFLOWS[self.config.workflow_type](
             llm_client=self.llm_client,
@@ -208,7 +220,7 @@ class StemAgent:
 
     def run_baseline(self):
         tools_names = []
-        schemas, executors = get_tools(tools_names)
+        schemas, executors = get_tools(tools_names, db=self.db)
 
         user_msg = {
             "role": "user",
@@ -272,7 +284,7 @@ class StemAgent:
         return self._generate_mutation(parent)
 
     def _generate_initial(self) -> AgentConfig:
-        tools_names = [*CUSTOM_TOOLS, *BUILTIN_TOOLS]
+        tools_names = [*CUSTOM_TOOLS, *BUILTIN_TOOLS, "search_knowledge_base"]
 
         prompt = generate_config_init_prompt(
             problem_class=self.target.problem_class,
@@ -303,7 +315,7 @@ class StemAgent:
         return config
 
     def _generate_mutation(self, parent: AgentConfig) -> AgentConfig:
-        tools_names = [*CUSTOM_TOOLS, *BUILTIN_TOOLS]
+        tools_names = [*CUSTOM_TOOLS, *BUILTIN_TOOLS, "search_knowledge_base"]
 
         prompt = generate_config_prompt(
             problem_class=self.target.problem_class,
@@ -335,7 +347,7 @@ class StemAgent:
         return config
 
     def _evaluate(self):
-        schemas, executors = get_tools(self.current_config.tools)
+        schemas, executors = get_tools(self.current_config.tools, db=self.db)
 
         def run_eval(task):
             agent_workflow = WORKFLOWS[self.current_config.workflow_type](

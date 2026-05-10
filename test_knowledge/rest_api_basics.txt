@@ -1,0 +1,7 @@
+REST API design is based on six architectural constraints defined by Roy Fielding in 2000.
+The constraints are: client-server separation, statelessness, cacheability, uniform interface,
+layered system, and code-on-demand (optional). Statelessness means each request must contain
+all information needed to process it. The server stores no client session state between requests.
+The uniform interface constraint is the most important — it decouples the client from the server
+implementation. It requires resource identification via URIs, manipulation through representations,
+self-descriptive messages, and hypermedia as the engine of application state (HATEOAS).
