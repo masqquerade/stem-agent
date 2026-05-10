@@ -15,10 +15,6 @@ def write_file(path: str, content: str) -> str:
         f.write(content)
     return f"Wrote {len(content)} bytes to {path}"
 
-
-
-
-
 CUSTOM_TOOLS = {
     "read_file": {
         "fn": read_file,
@@ -70,12 +66,11 @@ BUILTIN_TOOLS = {
 SEARCH_KB_SCHEMA = {
     "type": "function",
     "name": "search_knowledge_base",
-    "description": "Search internal knowledge base for relevant information",
+    "description": "Search the internal knowledge base for relevant information using a natural language query.",
     "parameters": {
         "type": "object",
         "properties": {
-            "query": {"type": "string"},
-            "n_results": {"type": "integer"}
+            "query": {"type": "string"}
         },
         "required": ["query"],
         "additionalProperties": False,
@@ -84,9 +79,11 @@ SEARCH_KB_SCHEMA = {
 }
 
 def make_search_tool(db: VectorDatabase):
-    def search_knowledge_base(query: str, n_results: int = 3) -> str:
-        result = db.query([query], n_results=n_results)
-        return json.dumps(result, indent=2)
+    import dataclasses
+    def search_knowledge_base(query: str) -> str:
+        results = db.query([query], n_results=3)
+        serializable = [[dataclasses.asdict(r) for r in batch] for batch in results]
+        return json.dumps(serializable, indent=2)
     return search_knowledge_base
 
 def get_tools(tool_names: list[str], db: VectorDatabase = None) -> tuple[list, dict]:
